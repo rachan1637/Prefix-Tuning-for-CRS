@@ -21,9 +21,10 @@ import os
 import re
 import sys
 import comet_ml
+import pickle
 import numpy as np
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ConstantLR
+from torch.optim.lr_scheduler import StepLR
 import torch.nn as nn
 from sklearn.metrics import (
     f1_score, 
@@ -59,7 +60,7 @@ from model import MyBertForSequenceClassification
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 # check_min_version("4.9.0")
 
-require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/question-answering/requirements.txt")
+# require_version("datasets>=1.8.0", "To fix: pip install -r examples/pytorch/question-answering/requirements.txt")
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ def main():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
-    log_level = training_args.get_process_log_level()
+    log_level = logging.INFO
     logger.setLevel(log_level)
     transformers.utils.logging.set_verbosity(log_level)
     transformers.utils.logging.enable_default_handler()
@@ -116,20 +117,30 @@ def main():
 
     # Data loading from LMRec
     if data_args.yelp_dataset_city is not None:
-        dataset = Dataset(data_args.yelp_dataset_city, masking=True)
+        city_map = {"toronto": "dataset/yelp_toronto.pkl"}
+        with open(city_map[data_args.yelp_dataset_city], "rb") as inp:
+            dataset = pickle.load(inp)
+        # dataset = Dataset(data_args.yelp_dataset_city, masking=True)
+        logger.info("Load the dataset successfully")
 
         if training_args.do_train:
-            train_dataset = {"input_ids": dataset.X_train[0], "attention_mask": dataset.X_train[1], "label_ids": dataset.y_train}
             if data_args.max_train_samples is not None:
-                train_dataset = train_dataset[:data_args.max_train_samples]
+                input_ids, attention_mask, label_ids = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
+            else:
+                input_ids, attention_mask, label_ids = dataset.X_train[0], dataset.X_train[1], dataset.y_train
+            train_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
         if training_args.do_eval:
-            eval_dataset = {"input_ids": dataset.X_eval[0], "attention_mask": dataset.X_eval[1], "label_ids": dataset.y_eval}
             if data_args.max_eval_samples is not None:
-                eval_dataset = eval_dataset[:data_args.max_eval_samples]
+                input_ids, attention_mask, label_ids = dataset.X_valid[0][:max_train_samples], dataset.X_valid[1][:max_train_samples], dataset.y_valid[:max_train_samples]
+            else:
+                input_ids, attention_mask, label_ids = dataset.X_valid[0], dataset.X_valid[1], dataset.y_valid
+            eval_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
         if training_args.do_predict:
-            test_dataset = {"input_ids": dataset.X_test[0], "attention_mask": dataset.X_test[1], "label_ids": dataset.y_test}
-            if data_args.max_test_samples is not None:
-                test_dataset = test_dataset[:data_args.max_test_samples]
+            if data_args.max_predict_samples is not None:
+                input_ids, attention_mask, label_ids = dataset.X_test[0][:max_train_samples], dataset.X_test[1][:max_train_samples], dataset.y_test[:max_train_samples]
+            else:
+                input_ids, attention_mask, label_ids = dataset.X_test[0], dataset.X_test[1], dataset.y_test
+            test_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
 
     config = AutoConfig.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
@@ -236,7 +247,7 @@ def main():
     
     params = [p for p in model.parameters()]
     optimizer = Adam(params=params, lr=training_args.learning_rate)
-    scheduler = ConstantLR(optimizer)
+    scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
 
     trainer = Trainer(
         model=model,

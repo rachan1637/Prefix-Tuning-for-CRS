@@ -11,6 +11,8 @@ from nltk.corpus import stopwords
 import nltk
 import os.path
 import wget
+from dataclasses import dataclass
+from typing import List
 
 nltk.download('stopwords')
 
