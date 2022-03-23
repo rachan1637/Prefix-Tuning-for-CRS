@@ -4,7 +4,7 @@ export COMET_API_KEY="mjjBKjs43nOnovqf9fO5YCfYh"
 export COMET_PROJECT_NAME=prefix-rec-exp
 export COMET_WORKSPACE=rachan1637
 
-# source ENV/bin/activate
+source ENV/bin/activate
 
 output_dir=outputs/lmrec_toronto_reproduce
 
@@ -16,8 +16,8 @@ python run.py \
   --do_predict \
   --max_train_samples 10 \
   --max_eval_samples 10 \
-  --per_device_train_batch_size 32 \
-  --per_device_eval_batch_size 32 \
+  --per_device_train_batch_size 10 \
+  --per_device_eval_batch_size 10 \
   --learning_rate 5e-5 \
   --num_train_epochs 12 \
   --max_seq_length 400 \

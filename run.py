@@ -125,19 +125,22 @@ def main():
 
         if training_args.do_train:
             if data_args.max_train_samples is not None:
+                max_train_samples = data_args.max_train_samples
                 input_ids, attention_mask, label_ids = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
             else:
                 input_ids, attention_mask, label_ids = dataset.X_train[0], dataset.X_train[1], dataset.y_train
             train_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
         if training_args.do_eval:
             if data_args.max_eval_samples is not None:
-                input_ids, attention_mask, label_ids = dataset.X_valid[0][:max_train_samples], dataset.X_valid[1][:max_train_samples], dataset.y_valid[:max_train_samples]
+                max_eval_samples = data_args.max_eval_samples
+                input_ids, attention_mask, label_ids = dataset.X_eval[0][:max_eval_samples], dataset.X_eval[1][:max_eval_samples], dataset.y_eval[:max_eval_samples]
             else:
-                input_ids, attention_mask, label_ids = dataset.X_valid[0], dataset.X_valid[1], dataset.y_valid
+                input_ids, attention_mask, label_ids = dataset.X_eval[0], dataset.X_eval[1], dataset.y_eval
             eval_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
         if training_args.do_predict:
             if data_args.max_predict_samples is not None:
-                input_ids, attention_mask, label_ids = dataset.X_test[0][:max_train_samples], dataset.X_test[1][:max_train_samples], dataset.y_test[:max_train_samples]
+                max_predict_samples = data_args.max_predict_samples
+                input_ids, attention_mask, label_ids = dataset.X_test[0][:max_predict_samples], dataset.X_test[1][:max_predict_samples], dataset.y_test[:max_predict_samples]
             else:
                 input_ids, attention_mask, label_ids = dataset.X_test[0], dataset.X_test[1], dataset.y_test
             test_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}

@@ -14,7 +14,7 @@ import wget
 from dataclasses import dataclass
 from typing import List
 
-nltk.download('stopwords')
+# nltk.download('stopwords')
 
 relations = {'Brother', 'Sister', 'Son', 'Daughter', 'Mother', 'Father', 'Boyfriend', 'Girlfriend', 'Aunt', 'Uncle',
              'Nephew', 'Niece', 'Grandmother', 'Grandfather', 'Grandson', 'Granddaughter', 'Stepson', 'Stepdaughter',
@@ -50,11 +50,11 @@ locations = {"Spring lake", "Saintjohns", "Riverside", "Mercy drive", "Allandale
              "Scarborough city centre", "Buckhead", "Hospital", "Mlk", "Linnton", "South linden", "Barton hills",
              "Bank", "Centennial", "Poncey highland", "Corktown", "The seaport district"}
 
-if not os.path.isfile("names.txt"):
-    wget.download("https://raw.githubusercontent.com/rbouadjenek/SIGIR22_LMRec/main/names.txt")
+# if not os.path.isfile("names.txt"):
+#     wget.download("https://raw.githubusercontent.com/rbouadjenek/SIGIR22_LMRec/main/names.txt")
 names = set(line.strip() for line in open('names.txt'))
-stopwords = stopwords.words('english')
-nltk.download('punkt')
+# stopwords = stopwords.words('english')
+# nltk.download('punkt')
 
 
 class Dataset:
