@@ -1,10 +1,10 @@
 #!/bin/sh
 
-export COMET_API_KEY="mjjBKjs43nOnovqf9fO5YCfYh"
-export COMET_PROJECT_NAME=prefix-rec-exp
-export COMET_WORKSPACE=rachan1637
+# export COMET_API_KEY="mjjBKjs43nOnovqf9fO5YCfYh"
+# export COMET_PROJECT_NAME=prefix-rec-exp
+# export COMET_WORKSPACE=rachan1637
 
-source ENV/bin/activate
+# source ENV/bin/activate
 
 output_dir=outputs/lmrec_toronto_reproduce
 

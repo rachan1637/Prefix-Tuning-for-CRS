@@ -24,7 +24,8 @@ import comet_ml
 import pickle
 import numpy as np
 from torch.optim import Adam
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import ConstantLR
+import torch
 import torch.nn as nn
 from sklearn.metrics import (
     f1_score, 
@@ -51,7 +52,7 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 from data import Dataset
 
-from data_utils import LineByLineJsonRecommendationDataset, DataCollatorForMultiUserRecommendation
+from data_utils import LineByLineJsonRecommendationDataset, DataCollatorForYelpRec, YelpRecDataset, DataCollatorForMultiUserRecommendation
 
 from arguments import ModelArguments, DataTrainingArguments
 from model import MyBertForSequenceClassification
@@ -129,21 +130,24 @@ def main():
                 input_ids, attention_mask, label_ids = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
             else:
                 input_ids, attention_mask, label_ids = dataset.X_train[0], dataset.X_train[1], dataset.y_train
-            train_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
+            train_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "label_ids": torch.tensor(label_ids)}
+            train_dataset = YelpRecDataset(train_dataset)
         if training_args.do_eval:
             if data_args.max_eval_samples is not None:
                 max_eval_samples = data_args.max_eval_samples
                 input_ids, attention_mask, label_ids = dataset.X_eval[0][:max_eval_samples], dataset.X_eval[1][:max_eval_samples], dataset.y_eval[:max_eval_samples]
             else:
                 input_ids, attention_mask, label_ids = dataset.X_eval[0], dataset.X_eval[1], dataset.y_eval
-            eval_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
+            eval_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "label_ids": torch.tensor(label_ids)}
+            eval_dataset = YelpRecDataset(eval_dataset)
         if training_args.do_predict:
             if data_args.max_predict_samples is not None:
                 max_predict_samples = data_args.max_predict_samples
                 input_ids, attention_mask, label_ids = dataset.X_test[0][:max_predict_samples], dataset.X_test[1][:max_predict_samples], dataset.y_test[:max_predict_samples]
             else:
                 input_ids, attention_mask, label_ids = dataset.X_test[0], dataset.X_test[1], dataset.y_test
-            test_dataset = {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
+            test_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "label_ids": torch.tensor(label_ids)}
+            test_dataset = YelpRecDataset(test_dataset)
 
     config = AutoConfig.from_pretrained(
         model_args.config_name if model_args.config_name else model_args.model_name_or_path,
@@ -156,7 +160,7 @@ def main():
 
     # There are totally 1121 labels for Yelp_Toronto.csv
     if data_args.yelp_dataset_city is not None:
-        config.num_labels = len(set(train_dataset['label_ids']))
+        config.num_labels = len(set(train_dataset.label_ids))
     else:
         if model_args.num_labels == 0:
             raise ValueError("Please specify the number of labels in the dataset")
@@ -220,7 +224,7 @@ def main():
             if data_args.max_test_samples is not None:
                 test_dataset = test_dataset[:data_args.max_test_samples]
     
-    data_collator = default_data_collator if data_args.yelp_dataset.city is not None else DataCollatorForMultiUserRecommendation(tokenizer)
+    data_collator = DataCollatorForYelpRec() if data_args.yelp_dataset_city is not None else DataCollatorForMultiUserRecommendation(tokenizer)
 
     def compute_metrics(eval_predictions: EvalPrediction):
         predictions = eval_predictions.predictions
@@ -250,7 +254,8 @@ def main():
     
     params = [p for p in model.parameters()]
     optimizer = Adam(params=params, lr=training_args.learning_rate)
-    scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
+    # scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
+    scheduler = ConstantLR(optimizer)
 
     trainer = Trainer(
         model=model,

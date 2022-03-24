@@ -15,7 +15,7 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         self.bert = AutoModel.from_pretrained('bert-base-uncased')
         self.dropout = nn.Dropout(0.4)
 
-        self.classifier1 = nn.Module(
+        self.classifier1 = nn.Sequential(
             nn.Linear(in_features=config.hidden_size, out_features=1024, bias=True),
             nn.ReLU(),
         )
@@ -29,7 +29,7 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         self,
         input_ids=None,
         attention_mask=None,
-        labels=None,
+        label_ids=None,
         **kwargs
     ):
         outputs = self.bert(input_ids, attention_mask=attention_mask)
@@ -39,7 +39,8 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         logits = self.dropout(logits)
         logits = self.classifier2(logits)
 
-        loss = nn.CrossEntropyLoss(logits.view(-1, self.config.num_labels), labels.view(-1))
+        loss_fct = nn.CrossEntropyLoss()
+        loss = loss_fct(logits.view(-1, self.config.num_labels), label_ids.view(-1))
         
         return SequenceClassifierOutput(
             loss=loss,

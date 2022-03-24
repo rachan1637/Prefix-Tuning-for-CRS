@@ -93,6 +93,38 @@ class LineByLineJsonRecommendationDataset(Dataset):
                 )
 
 @dataclass
+class YelpRecDataset:
+    input_ids=None,
+    attention_mask=None,
+    label_ids=None,
+
+    def __init__(self, input_dict):
+        self.input_ids = input_dict['input_ids']
+        self.attention_mask = input_dict['attention_mask']
+        self.label_ids = input_dict['label_ids']
+
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, i):
+        return (
+            torch.tensor(self.input_ids[i], dtype=torch.long),
+            torch.tensor(self.attention_mask[i], dtype=torch.long),
+            torch.tensor(self.label_ids[i], dtype=torch.long)
+        )
+
+class DataCollatorForYelpRec:
+    def __call__(self, examples):
+        input_ids, attention_mask, label_ids = zip(*examples)
+
+        input_ids = torch.stack(input_ids, dim=0)
+        attention_mask = torch.stack(attention_mask, dim = 0)
+        label_ids = torch.stack(label_ids, dim = 0)
+
+        # labels[labels == self.tokenizer.pad_token_id] = -100 # tgt
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "label_ids": label_ids}
+
+@dataclass
 class DataCollatorForMultiUserRecommendation:
     """
     Data collator used for Single User language modeling.

@@ -3,3 +3,4 @@ bert_base_uncased/
 __pycache__/
 env/
 ENV/
+outputs/
