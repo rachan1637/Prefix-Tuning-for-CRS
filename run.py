@@ -127,26 +127,26 @@ def main():
         if training_args.do_train:
             if data_args.max_train_samples is not None:
                 max_train_samples = data_args.max_train_samples
-                input_ids, attention_mask, label_ids = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
+                input_ids, attention_mask, labels = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
             else:
-                input_ids, attention_mask, label_ids = dataset.X_train[0], dataset.X_train[1], dataset.y_train
-            train_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "label_ids": torch.tensor(label_ids)}
+                input_ids, attention_mask, labels = dataset.X_train[0], dataset.X_train[1], dataset.y_train
+            train_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
             train_dataset = YelpRecDataset(train_dataset)
         if training_args.do_eval:
             if data_args.max_eval_samples is not None:
                 max_eval_samples = data_args.max_eval_samples
-                input_ids, attention_mask, label_ids = dataset.X_eval[0][:max_eval_samples], dataset.X_eval[1][:max_eval_samples], dataset.y_eval[:max_eval_samples]
+                input_ids, attention_mask, labels = dataset.X_eval[0][:max_eval_samples], dataset.X_eval[1][:max_eval_samples], dataset.y_eval[:max_eval_samples]
             else:
-                input_ids, attention_mask, label_ids = dataset.X_eval[0], dataset.X_eval[1], dataset.y_eval
-            eval_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "label_ids": torch.tensor(label_ids)}
+                input_ids, attention_mask, labels = dataset.X_eval[0], dataset.X_eval[1], dataset.y_eval
+            eval_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
             eval_dataset = YelpRecDataset(eval_dataset)
         if training_args.do_predict:
             if data_args.max_predict_samples is not None:
                 max_predict_samples = data_args.max_predict_samples
-                input_ids, attention_mask, label_ids = dataset.X_test[0][:max_predict_samples], dataset.X_test[1][:max_predict_samples], dataset.y_test[:max_predict_samples]
+                input_ids, attention_mask, labels = dataset.X_test[0][:max_predict_samples], dataset.X_test[1][:max_predict_samples], dataset.y_test[:max_predict_samples]
             else:
-                input_ids, attention_mask, label_ids = dataset.X_test[0], dataset.X_test[1], dataset.y_test
-            test_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "label_ids": torch.tensor(label_ids)}
+                input_ids, attention_mask, labels = dataset.X_test[0], dataset.X_test[1], dataset.y_test
+            test_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
             test_dataset = YelpRecDataset(test_dataset)
 
     config = AutoConfig.from_pretrained(
@@ -159,12 +159,12 @@ def main():
     # This section is to set up some other attributes in model config
 
     # There are totally 1121 labels for Yelp_Toronto.csv
-    if data_args.yelp_dataset_city is not None:
-        config.num_labels = len(set(train_dataset.label_ids))
-    else:
-        if model_args.num_labels == 0:
-            raise ValueError("Please specify the number of labels in the dataset")
+    if model_args.num_labels != 0:
         config.num_labels = model_args.num_labels
+    elif data_args.yelp_dataset_city is not None:
+        config.num_labels = len(set(train_dataset.labels)) if training_args.do_train else len(set(eval_dataset.labels))
+    else:
+        raise ValueError("Please specify the number of labels in the dataset")
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -249,7 +249,7 @@ def main():
         mrr = mean_reciprocal_rank(y_true, y_pred)
 
         out = {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy,
-            'MRR': mrr, 'HR@5': hit_rates5, 'HR@10': hit_rates10, 'HR@20': hit_rates20}
+            'MRR_0': mrr[0], 'MRR_1': mrr[1], 'HR@5': hit_rates5, 'HR@10': hit_rates10, 'HR@20': hit_rates20}
         return out
     
     params = [p for p in model.parameters()]
@@ -261,8 +261,8 @@ def main():
         model=model,
         args=training_args,
         data_collator=data_collator,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+        train_dataset=train_dataset if training_args.do_train else None,
+        eval_dataset=eval_dataset if training_args.do_eval else None,
         optimizers=(optimizer, scheduler),
         compute_metrics=compute_metrics
     )

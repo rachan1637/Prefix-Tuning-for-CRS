@@ -9,7 +9,7 @@ from transformers.modeling_outputs import SequenceClassifierOutput
 class MyBertForSequenceClassification(BertPreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
-        print(config)
+        # print(config)
         self.config = config
 
         self.bert = AutoModel.from_pretrained('bert-base-uncased')
@@ -29,7 +29,7 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         self,
         input_ids=None,
         attention_mask=None,
-        label_ids=None,
+        labels=None,
         **kwargs
     ):
         outputs = self.bert(input_ids, attention_mask=attention_mask)
@@ -40,7 +40,7 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         logits = self.classifier2(logits)
 
         loss_fct = nn.CrossEntropyLoss()
-        loss = loss_fct(logits.view(-1, self.config.num_labels), label_ids.view(-1))
+        loss = loss_fct(logits.view(-1, self.config.num_labels), labels.view(-1))
         
         return SequenceClassifierOutput(
             loss=loss,

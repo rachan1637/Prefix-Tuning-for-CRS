@@ -1,6 +1,8 @@
 dataset/
-bert_base_uncased/
+bert-base-uncased/
 __pycache__/
 env/
 ENV/
 outputs/
+core.*
+slurm-*
