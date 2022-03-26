@@ -61,9 +61,9 @@ from data_utils import (
 )
 
 from arguments import ModelArguments, DataTrainingArguments
-from bert_rec_model import MyBertForSequenceClassification
-from gpt_rec_model import MyGPT2ForSequenceCLassification
-from gpt_rec_prefix_model import Prefix_GPT2ForRec
+from model.bert_rec_model import MyBertForSequenceClassification
+from model.gpt_rec_model import MyGPT2ForSequenceCLassification
+from model.gpt_rec_prefix_model import Prefix_GPT2ForRec
 # from metrics import f1_recall_precision_metric
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -210,12 +210,6 @@ def main():
         config.pad_token_id = 50256
         
         if model_args.tuning_mode == "prefixtune":
-            config2 = AutoConfig.from_pretrained(
-                model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-                cache_dir=model_args.cache_dir,
-                revision=model_args.model_revision,
-                use_auth_token=True if model_args.use_auth_token else None,
-            )
             if model_args.num_users == 0:
                 raise ValueError("Please specify the num_users")
             if model_args.prefix_seq_len == 0:
@@ -223,9 +217,14 @@ def main():
             if model_args.mid_dim == 0:
                 raise ValueError("Please specify mid_dim (512 in general)")
 
-            config2.preseqlen = model_args.prefix_seq_len
-            config2.num_users = model_args.num_users
-            config2.mid_dim = model_args.mid_dim
+            config.preseqlen = model_args.prefix_seq_len
+            config.num_users = model_args.num_users
+            config.mid_dim = model_args.mid_dim
+            config.tuning_mode = "prefixtune"
+        elif model_args.tuning_mode == "finetune":
+            config.tuning_mode = "finetune"
+        else:
+            raise ValueError(f"Unrecoginized tuning_mode {model_args.tuning_mode}")
 
     # There are totally 1121 labels for Yelp_Toronto.csv
     if model_args.num_labels != 0:
@@ -267,20 +266,20 @@ def main():
             else:
                 model = MyGPT2ForSequenceCLassification(config)
         elif model_args.tuning_mode == 'prefixtune':
-            if model_args.model_name_or_path != "gpt2-medium":
-                model = Prefix_GPT2ForRec(
+            if model_args.model_name_or_path not in ["gpt2", "gpt2-medium"]:
+                model = Prefix_GPT2ForRec.from_pretrained(
                     model_args.model_name_or_path,
                     from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                    config=config2,
+                    config=config,
                     cache_dir=model_args.cache_dir,
                     revision=model_args.model_revision,
                     use_auth_token=True if model_args.use_auth_token else None,
                 )
             else:
-                prefix_model = Prefix_GPT2ForRec(config2)
+                prefix_model = Prefix_GPT2ForRec(config)
+                model = MyGPT2ForSequenceCLassification(config)
                 prefix_model.set_gpt2(model)
                 model = prefix_model
-                import pdb; pdb.set_trace()
     else:
         raise ValueError("The model type can only be bert or gpt2")
     

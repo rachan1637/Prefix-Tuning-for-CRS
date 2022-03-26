@@ -29,8 +29,8 @@ CUDA_LAUNCH_BLOCKING=1 python run.py \
   --load_best_model_at_end \
   --num_labels 1121 \
   --input_data_mode keyphrase \
-  --tuning_mode prefixtune
-  # --prefix_seq_len 1 \
-  # --mid_dim 512 \
-  # --num_users 1
+  --tuning_mode prefixtune \
+  --prefix_seq_len 1 \
+  --mid_dim 512 \
+  --num_users 1
   # --num_users 1073 \
