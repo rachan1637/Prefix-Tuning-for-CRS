@@ -20,10 +20,10 @@ import logging
 import os
 import re
 import sys
-import comet_ml
+# import comet_ml
 import pickle
 import numpy as np
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ConstantLR
 import torch
 import torch.nn as nn
@@ -52,10 +52,18 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 from data import Dataset
 
-from data_utils import LineByLineJsonRecommendationDataset, DataCollatorForYelpRec, YelpRecDataset, DataCollatorForMultiUserRecommendation
+from data_utils import (
+    LineByLineJsonRecommendationDataset, 
+    DataCollatorForYelpRec, 
+    YelpRecDataset, 
+    DataCollatorForMultiUserRecommendation,
+    load_dataset
+)
 
 from arguments import ModelArguments, DataTrainingArguments
-from model import MyBertForSequenceClassification
+from bert_rec_model import MyBertForSequenceClassification
+from gpt_rec_model import MyGPT2ForSequenceCLassification
+from gpt_rec_prefix_model import Prefix_GPT2ForRec
 # from metrics import f1_recall_precision_metric
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -118,45 +126,106 @@ def main():
 
     # Data loading from LMRec
     if data_args.yelp_dataset_city is not None:
-        city_map = {"toronto": "dataset/yelp_toronto.pkl"}
+        if "bert" in model_args.model_type: 
+            city_map = {"toronto": "dataset/yelp_toronto_selected_bert.pkl"}
+        elif "gpt2" in model_args.model_type:
+            city_map = {"toronto": "dataset/yelp_toronto_selected_gpt2.pkl"}
         with open(city_map[data_args.yelp_dataset_city], "rb") as inp:
             dataset = pickle.load(inp)
-        # dataset = Dataset(data_args.yelp_dataset_city, masking=True)
-        logger.info("Load the dataset successfully")
+        # dataset = Dataset(
+        #     data_args.yelp_dataset_city, 
+        #     csv_file=city_map[data_args.yelp_dataset_city],
+        #     masking=False, 
+        #     model_type = model_args.model_type, 
+        #     max_len = data_args.max_seq_length, 
+        #     # This part is simplified since we generally takes max_seq_len = 400, 
+        #     # if max_seq_len + prefix_seq_len > 512 for bert or > 1024 for gpt2
+        #     # the max_len should be max_seq_len - prefix_seq_len
+        # )
+        # with open(city_map[data_args.yelp_dataset_city], "wb") as outp: pickle.dump(dataset, outp)
+        logger.info(f"Load the dataset successfully {city_map[data_args.yelp_dataset_city]}")
 
         if training_args.do_train:
-            if data_args.max_train_samples is not None:
-                max_train_samples = data_args.max_train_samples
-                input_ids, attention_mask, labels = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
+            logger.info(f"The input_data_mode for train is {data_args.input_data_mode}")
+            if data_args.input_data_mode == "keyphrase":
+                train_dataset = load_dataset(
+                    X = dataset.X_key_train, 
+                    y = dataset.y_train, 
+                    user_labels = dataset.user_labels_train, 
+                    max_samples = data_args.max_train_samples
+                )
+            elif data_args.input_data_mode == "review":
+                train_dataset = load_dataset(
+                    X = dataset.X_train, 
+                    y = dataset.y_train, 
+                    user_labels = dataset.user_labels_train, 
+                    max_samples = data_args.max_train_samples
+                )
             else:
-                input_ids, attention_mask, labels = dataset.X_train[0], dataset.X_train[1], dataset.y_train
-            train_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
-            train_dataset = YelpRecDataset(train_dataset)
+                raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
         if training_args.do_eval:
-            if data_args.max_eval_samples is not None:
-                max_eval_samples = data_args.max_eval_samples
-                input_ids, attention_mask, labels = dataset.X_eval[0][:max_eval_samples], dataset.X_eval[1][:max_eval_samples], dataset.y_eval[:max_eval_samples]
+            logger.info(f"The input_data_mode for eval is {data_args.input_data_mode}")
+            if data_args.input_data_mode == "keyphrase":
+                eval_dataset = load_dataset(
+                    X = dataset.X_key_eval, 
+                    y = dataset.y_eval, 
+                    user_labels = dataset.user_labels_eval, 
+                    max_samples = data_args.max_eval_samples
+                )
+            elif data_args.input_data_mode == "review":
+                eval_dataset = load_dataset(
+                    X = dataset.X_eval, 
+                    y = dataset.y_eval, 
+                    user_labels = dataset.user_labels_eval, 
+                    max_samples = data_args.max_eval_samples
+                )
             else:
-                input_ids, attention_mask, labels = dataset.X_eval[0], dataset.X_eval[1], dataset.y_eval
-            eval_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
-            eval_dataset = YelpRecDataset(eval_dataset)
+                raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
         if training_args.do_predict:
-            if data_args.max_predict_samples is not None:
-                max_predict_samples = data_args.max_predict_samples
-                input_ids, attention_mask, labels = dataset.X_test[0][:max_predict_samples], dataset.X_test[1][:max_predict_samples], dataset.y_test[:max_predict_samples]
+            logger.info(f"The input_data_mode for test is {data_args.input_data_mode}")
+            if data_args.input_data_mode == "keyphrase":
+                test_dataset = load_dataset(
+                    X = dataset.X_key_test, 
+                    y = dataset.y_test, 
+                    user_labels = dataset.user_labels_test, 
+                    max_samples = data_args.max_predict_samples
+                )
+            elif data_args.input_data_mode == "review":
+                test_dataset = load_dataset(
+                    X = dataset.X_test, 
+                    y = dataset.y_test, 
+                    user_labels = dataset.user_labels_test, 
+                    max_samples = data_args.max_predict_samples
+                )
             else:
-                input_ids, attention_mask, labels = dataset.X_test[0], dataset.X_test[1], dataset.y_test
-            test_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
-            test_dataset = YelpRecDataset(test_dataset)
+                raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
 
+    # if model_args.model_name_or_path in ['gpt2', 'gpt2-medium', 'bert-base-uncased']:
     config = AutoConfig.from_pretrained(
-        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
+        model_args.model_name_or_path
     )
 
     # This section is to set up some other attributes in model config
+    if model_args.model_type == 'gpt2':
+        config.pad_token_id = 50256
+        
+        if model_args.tuning_mode == "prefixtune":
+            config2 = AutoConfig.from_pretrained(
+                model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
+            if model_args.num_users == 0:
+                raise ValueError("Please specify the num_users")
+            if model_args.prefix_seq_len == 0:
+                raise ValueError("Please specify prefix_seq_len")
+            if model_args.mid_dim == 0:
+                raise ValueError("Please specify mid_dim (512 in general)")
+
+            config2.preseqlen = model_args.prefix_seq_len
+            config2.num_users = model_args.num_users
+            config2.mid_dim = model_args.mid_dim
 
     # There are totally 1121 labels for Yelp_Toronto.csv
     if model_args.num_labels != 0:
@@ -166,65 +235,56 @@ def main():
     else:
         raise ValueError("Please specify the number of labels in the dataset")
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
-        cache_dir=model_args.cache_dir,
-        use_fast=True,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
+    # tokenizer = AutoTokenizer.from_pretrained(
+    #     model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
+    #     cache_dir=model_args.cache_dir,
+    #     use_fast=True,
+    #     revision=model_args.model_revision,
+    #     use_auth_token=True if model_args.use_auth_token else None,
+    # )
 
-    # model = MyBertForSequenceClassification.from_config(config)
-    model = MyBertForSequenceClassification.from_pretrained(
-        model_args.model_name_or_path,
-        from_tf=bool(".ckpt" in model_args.model_name_or_path),
-        config=config,
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-        use_auth_token=True if model_args.use_auth_token else None,
-    )
-
-    if data_args.max_seq_length > tokenizer.model_max_length:
-        logger.warning(
-            f"The max_seq_length passed ({data_args.max_seq_length}) is larger than the maximum length for the"
-            f"model ({tokenizer.model_max_length}). Using max_seq_length={tokenizer.model_max_length}."
-        )
-    max_seq_length = min(data_args.max_seq_length, tokenizer.model_max_length)
-
-    # Get the datasets if it's not created from LMRec
-    if data_args.yelp_dataset_city is None:
-        if data_args.train_file is not None and training_args.do_train:
-            train_dataset = LineByLineJsonRecommendationDataset(
-                tokenizer=tokenizer,
-                file_path=data_args.train_file,
-                block_size=max_seq_length,
-                input_data_mode="review",
-                model_type=model_args.model_type
+    if model_args.model_type == "bert":
+        if model_args.model_name_or_path != "bert-base-uncased":
+            model = MyBertForSequenceClassification.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
             )
-            if data_args.max_train_samples is not None:
-                train_dataset = train_dataset[:data_args.max_train_samples]
-        if data_args.validation_file is not None and training_args.do_eval:
-            eval_dataset = LineByLineJsonRecommendationDataset(
-                tokenizer=tokenizer,
-                file_path=data_args.validation_file,
-                block_size=max_seq_length,
-                input_data_mode="review",
-                model_type=model_args.model_type
-            )
-            if data_args.max_eval_samples is not None:
-                eval_dataset = eval_dataset[:data_args.max_eval_samples]
-        if data_args.test_file is not None and training_args.do_predict:
-            test_dataset = LineByLineJsonRecommendationDataset(
-                tokenizer=tokenizer,
-                file_path=data_args.test_file,
-                block_size=max_seq_length,
-                input_data_mode="review",
-                model_type=model_args.model_type
-            )
-            if data_args.max_test_samples is not None:
-                test_dataset = test_dataset[:data_args.max_test_samples]
+        else:
+            model = MyBertForSequenceClassification(config)
+    elif model_args.model_type == "gpt2":
+        if model_args.tuning_mode == "finetune":
+            if model_args.model_name_or_path not in ["gpt2-medium", "gpt2"]:
+                model = MyGPT2ForSequenceCLassification.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+            else:
+                model = MyGPT2ForSequenceCLassification(config)
+        elif model_args.tuning_mode == 'prefixtune':
+            if model_args.model_name_or_path != "gpt2-medium":
+                model = Prefix_GPT2ForRec(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config2,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+            else:
+                prefix_model = Prefix_GPT2ForRec(config2)
+                prefix_model.set_gpt2(model)
+                model = prefix_model
+                import pdb; pdb.set_trace()
+    else:
+        raise ValueError("The model type can only be bert or gpt2")
     
-    data_collator = DataCollatorForYelpRec() if data_args.yelp_dataset_city is not None else DataCollatorForMultiUserRecommendation(tokenizer)
+    data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode) 
 
     def compute_metrics(eval_predictions: EvalPrediction):
         predictions = eval_predictions.predictions
@@ -242,10 +302,10 @@ def main():
         recall = recall_score(y_true = y_true, y_pred = np.argmax(y_pred, axis=1), average="weighted")
         precision = precision_score(y_true = y_true, y_pred = np.argmax(y_pred, axis=1), average="weighted")
 
-        hit_rates5 = top_k_accuracy_score(y_true, y_pred, k=5)
-        hit_rates10 = top_k_accuracy_score(y_true, y_pred, k=10)
-        hit_rates20 = top_k_accuracy_score(y_true, y_pred, k=20)
-        accuracy = top_k_accuracy_score(y_true, y_pred, k=1)
+        hit_rates5 = top_k_accuracy_score(y_true, y_pred, k=5, labels = range(model_args.num_labels))
+        hit_rates10 = top_k_accuracy_score(y_true, y_pred, k=10, labels = range(model_args.num_labels))
+        hit_rates20 = top_k_accuracy_score(y_true, y_pred, k=20, labels = range(model_args.num_labels))
+        accuracy = top_k_accuracy_score(y_true, y_pred, k=1, labels = range(model_args.num_labels)) 
         mrr = mean_reciprocal_rank(y_true, y_pred)
 
         out = {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy,
@@ -263,7 +323,7 @@ def main():
         data_collator=data_collator,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
-        optimizers=(optimizer, scheduler),
+        # optimizers=(optimizer, scheduler),
         compute_metrics=compute_metrics
     )
 

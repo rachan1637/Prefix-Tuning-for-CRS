@@ -12,7 +12,7 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         # print(config)
         self.config = config
 
-        self.bert = AutoModel.from_pretrained('bert-base-uncased')
+        self.bert = AutoModel.from_pretrained("bert-base-uncased")
         self.dropout = nn.Dropout(0.4)
 
         self.classifier1 = nn.Sequential(
@@ -27,9 +27,10 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
     
     def forward(
         self,
-        input_ids=None,
-        attention_mask=None,
-        labels=None,
+        input_ids,
+        attention_mask,
+        labels,
+        user_labels = None,
         **kwargs
     ):
         outputs = self.bert(input_ids, attention_mask=attention_mask)

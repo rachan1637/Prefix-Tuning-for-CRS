@@ -6,18 +6,20 @@
 
 source ENV/bin/activate
 
-output_dir=outputs/lmrec_toronto_reproduce_ep15
+model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/lmrec_toronto_reproduce
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bert_keyphrase_finetune
 
-python run.py \
-  --model_name_or_path bert-base-uncased \
+CUDA_LAUNCH_BLOCKING=1 python run.py \
+  --model_name_or_path "gpt2" \
+  --model_type gpt2 \
   --yelp_dataset_city toronto \
   --do_train \
   --do_eval \
   --do_predict \
-  --per_device_train_batch_size 14 \
-  --per_device_eval_batch_size 14 \
-  --learning_rate 5e-5 \
-  --num_train_epochs 15 \
+  --per_device_train_batch_size 20 \
+  --per_device_eval_batch_size 20 \
+  --learning_rate 6e-5 \
+  --num_train_epochs 10 \
   --max_seq_length 400 \
   --evaluation_strategy="epoch" \
   --output_dir ${output_dir} \
@@ -25,4 +27,10 @@ python run.py \
   --save_strategy="epoch" \
   --overwrite_output_dir \
   --load_best_model_at_end \
-  --num_labels 1121
+  --num_labels 1121 \
+  --input_data_mode keyphrase \
+  --tuning_mode prefixtune
+  # --prefix_seq_len 1 \
+  # --mid_dim 512 \
+  # --num_users 1
+  # --num_users 1073 \

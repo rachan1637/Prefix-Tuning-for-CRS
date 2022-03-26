@@ -24,6 +24,23 @@ from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 logger = logging.get_logger(__name__)
 
+def load_dataset(X, y, max_samples, user_labels = None):
+    if max_samples is not None:
+        max_train_samples = max_samples
+        input_ids, attention_mask, labels, user_labels = X[0][:max_train_samples], X[1][:max_train_samples], y[:max_train_samples], user_labels[:max_train_samples]
+        # input_ids, attention_mask, labels = X[0][:max_train_samples], X[1][:max_train_samples], y[:max_train_samples]
+    else:
+        input_ids, attention_mask, labels, user_labels = X[0], X[1], y, user_labels
+        # input_ids, attention_mask, labels = X[0], X[1], y
+    dataset = {
+        "input_ids": torch.tensor(input_ids), 
+        "attention_mask": torch.tensor(attention_mask), 
+        "labels": torch.tensor(labels),
+        "user_labels": torch.tensor(user_labels)
+    }
+    dataset = YelpRecDataset(dataset)
+    return dataset
+
 class LineByLineJsonRecommendationDataset(Dataset):
     """
     This is created for multi-user based prefix recommendation dataset
@@ -102,6 +119,7 @@ class YelpRecDataset:
         self.input_ids = input_dict['input_ids']
         self.attention_mask = input_dict['attention_mask']
         self.labels = input_dict['labels']
+        self.user_labels = input_dict['user_labels']
 
     def __len__(self):
         return len(self.input_ids)
@@ -110,19 +128,32 @@ class YelpRecDataset:
         return (
             torch.tensor(self.input_ids[i], dtype=torch.long),
             torch.tensor(self.attention_mask[i], dtype=torch.long),
-            torch.tensor(self.labels[i], dtype=torch.long)
+            torch.tensor(self.labels[i], dtype=torch.long),
+            torch.tensor(self.user_labels[i], dtype=torch.long)
         )
 
+@dataclass
 class DataCollatorForYelpRec:
+    tuning_mode: None
+        
     def __call__(self, examples):
-        input_ids, attention_mask, labels = zip(*examples)
+        input_ids, attention_mask, labels, user_labels = zip(*examples)
+        # input_ids, attention_mask, labels = zip(*examples)
 
         input_ids = torch.stack(input_ids, dim=0)
         attention_mask = torch.stack(attention_mask, dim = 0)
         labels = torch.stack(labels, dim = 0)
 
-        # labels[labels == self.tokenizer.pad_token_id] = -100 # tgt
-        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+        if self.tuning_mode == "finetune":
+            del user_labels
+            return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+        elif self.tuning_mode == "prefixtune":
+            user_labels = torch.stack(user_labels, dim = 0)
+
+            # labels[labels == self.tokenizer.pad_token_id] = -100 # tgt
+            return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels, "user_labels": user_labels}
+        else:
+            raise ValueError("Please specify tuning mode to be finetune or prefixtune")
 
 @dataclass
 class DataCollatorForMultiUserRecommendation:

@@ -49,6 +49,26 @@ class ModelArguments:
             "help": "The base model type (BERT, GPT-2, etc.)"
         }
     )
+    num_users: int = field(
+        default=0,
+        metadata={
+            "help": "The number of users (prefix) in the dataset"
+        }
+    )
+    prefix_seq_len: int = field(
+        default=0,
+        metadata = {
+            "help": "The prefix sequence length"
+        }
+    )
+    tuning_mode: str = field(
+        default="",
+        metadata = {"help": "the tuning mode, should be finetune or prefixtune"}
+    )
+    mid_dim: int = field(
+        default = 0,
+        metadata = {"help": "The intermediate layer dim for prefix tuning"}
+    )
 
 
 @dataclass
@@ -117,6 +137,10 @@ class DataTrainingArguments:
     # Added
     yelp_dataset_city: Optional[str] = field(
         default=None, metadata = {"help": "The name of city of yelp dataset that we want to use"}
+    )
+    # Input Data Mode
+    input_data_mode: Optional[str] = field(
+        default = None, metadata = {"help": "The input mode of data, should be keyphrase or review"}
     )
 
     def __post_init__(self):

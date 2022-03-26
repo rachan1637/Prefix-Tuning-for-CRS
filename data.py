@@ -1,8 +1,9 @@
+from csv import unregister_dialect
 from tensorflow import keras
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-from transformers import BertTokenizer
+from transformers import BertTokenizer, GPT2Tokenizer, GPT2TokenizerFast, BertTokenizerFast
 from tokenizers import BertWordPieceTokenizer
 import os
 import re
@@ -13,7 +14,7 @@ import os.path
 import wget
 from dataclasses import dataclass
 from typing import List
-
+from ast import literal_eval
 # nltk.download('stopwords')
 
 relations = {'Brother', 'Sister', 'Son', 'Daughter', 'Mother', 'Father', 'Boyfriend', 'Girlfriend', 'Aunt', 'Uncle',
@@ -58,17 +59,27 @@ names = set(line.strip() for line in open('names.txt'))
 
 
 class Dataset:
-    def __init__(self, dataset, masking=False):
+    def __init__(self, dataset, model_type, csv_file = None, masking=False, max_len=400):
+        if max_len != None:
+            self.max_len = max_len
         self.dataset = dataset
         self.masking = masking
-        dataset_path = self.data_path()
-        print('Data in: ', dataset_path)
-        df = pd.read_csv(dataset_path, lineterminator='\n')
-        df = df[['business_id', 'review_text', 'name', 'categories']]
+        if csv_file is None:
+            dataset_path = self.data_path()
+            print('Data in: ', dataset_path)
+            df = pd.read_csv(dataset_path, lineterminator='\n')
+        else:
+            df = pd.read_csv(csv_file, engine = 'python')
+
+        if csv_file is None:
+            df = df[['business_id', 'review_text', 'name', 'categories']]
+        else:
+            df = df[['business_id', 'review_text', 'name', 'categories', 'keyphrase_list', 'user_id']]
         df.dropna(subset=['business_id', 'review_text', 'name', 'categories'], inplace=True)
         self.df = df.sample(frac=1, random_state=1).reset_index(drop=True)
         self.item_dist = self.get_item_dist()
-        input_ids_list, attention_mask_list, y, labels = self.encode_data()
+        input_ids_list, attention_mask_list, y, labels, keyphrase_ids_list, attention_mask_key_list, user_labels, user_id_list = \
+            self.encode_data(model_type = model_type)
         self.num_labels = len(labels)
         train_size = int(len(y) * 0.8)
         eval_size = int(len(y) * 0.1)
@@ -84,60 +95,159 @@ class Dataset:
         self.X_test = [np.array(input_ids_list[train_size + eval_size:]),
                        np.array(attention_mask_list[train_size + eval_size:])]
         self.y_test = np.array(y[train_size + eval_size:])
+
+        self.X_key_train = [
+            np.array(keyphrase_ids_list[: train_size]), 
+            np.array(attention_mask_key_list[: train_size])
+        ]
+        self.X_key_eval = [
+            np.array(keyphrase_ids_list[train_size : train_size + eval_size]), 
+            np.array(attention_mask_key_list[train_size : train_size + eval_size])
+        ]
+        self.X_key_test = [
+            np.array(keyphrase_ids_list[train_size+eval_size :]), 
+            np.array(attention_mask_key_list[train_size + eval_size :])
+        ]
+
+        self.user_labels_train = np.array(user_labels[:train_size])
+        self.user_labels_eval = np.array(user_labels[train_size : train_size + eval_size])
+        self.user_labels_test = np.array(user_labels[train_size + eval_size:])
         # Extract categories
         self.business_to_categories = self.get_business_to_categories()
 
-    def encode_data(self):
+    def encode_data(self, model_type):
         labels = []
         input_ids_list = []
         attention_mask_list = []
         y = []
+        keyphrase_ids_list = []
+        attention_mask_key_list = []
+        user_id_list = []
+        user_labels = []
         data = self.df.values.tolist()
         # Save the slow pretrained tokenizer
-        slow_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        save_path = "bert_base_uncased/"
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-        slow_tokenizer.save_pretrained(save_path)
+        if "bert" in model_type:
+            # slow_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+            # # Load the fast tokenizer from saved file
+            # save_path = "bert_base_uncased/"
+            # if not os.path.exists(save_path):
+            #     os.makedirs(save_path)
+            # slow_tokenizer.save_pretrained(save_path)
+            tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
+        elif 'gpt2' in model_type:
+            # slow_tokenizer = GPT2Tokenizer.from_pretrained("gpt2-medium")
+            # save_path = "gpt2-medium/"
+            # if not os.path.exists(save_path):
+            #     os.makedirs(save_path)
+            # slow_tokenizer.save_pretrained(save_path)
+            tokenizer = GPT2TokenizerFast.from_pretrained("gpt2-medium")
 
-        # Load the fast tokenizer from saved file
-        tokenizer = BertWordPieceTokenizer("bert_base_uncased/vocab.txt", lowercase=True)
         with tqdm(total=len(data)) as pbar:
             for v in data:
                 pbar.update(1)
                 item = v[0]
                 review_text = v[1]
-                name = v[2]
+                user_id = v[2]
+                name = v[3]
+                k_list = literal_eval(v[4])
+                #TODO the min review check is removed since we already check it 
                 # check if enough review for the item
-                if self.item_dist[item] < self.min_reviews:
-                    continue
+                # if self.item_dist[item] < self.min_reviews:
+                #     continue
                 # mask item name from the review
-                mask = ' '.join(['[MASK]' for x in range(len(name.split()))])
-                pattern = re.compile(name, re.IGNORECASE)
-                review_text = pattern.sub(mask, review_text)
-                if self.masking:
-                    review_text = self.mask_entities(review_text)
+                # mask = ' '.join(['[MASK]' for x in range(len(name.split()))])
+
+                #TODO remove all masking
+                # pattern = re.compile(name, re.IGNORECASE)
+                # review_text = pattern.sub(mask, review_text)
+                # if self.masking:
+                #     review_text = self.mask_entities(review_text)
+
+                # Process keyphrase
+                categories = name.split()
+                remove_list = [",", "(", ")", "/"]
+                for i in range(len(categories)):
+                    if categories[i] == "&":
+                        continue
+                    for remove in remove_list:
+                        categories[i] = categories[i].replace(remove, "").lower()
+
+                category_text = " : ".join(categories)
+
+                keyphrase_text = ""
+                duplicate_key_list = []
+                for keyphrase in k_list:
+                    if keyphrase in duplicate_key_list:
+                        continue
+                    keyphrase_text = keyphrase_text + keyphrase[1] + " : "
+                    duplicate_key_list.append(keyphrase)
+                
+                if len(k_list) > 0:
+                    keyphrase_text = keyphrase_text[:-2]
+                
                 # Process text
-                tokenized_review = tokenizer.encode(review_text)
-                input_ids = tokenized_review.ids
-                attention_mask = [1] * len(input_ids)
-                # Pad and create attention masks.
-                # Truncate if needed
-                padding_length = self.max_len - len(input_ids)
-                if padding_length > 0:  # pad
-                    input_ids = input_ids + ([0] * padding_length)
-                    attention_mask = attention_mask + ([0] * padding_length)
-                else:
-                    input_ids = input_ids[0:self.max_len]
-                    input_ids[-1] = 102
-                    attention_mask = attention_mask[0:self.max_len]
+                input_ids, attention_mask = self.get_input_ids_and_att_mask(
+                    review_text, tokenizer, model_type
+                )
+
                 input_ids_list.append(input_ids)
                 attention_mask_list.append(attention_mask)
+
+                # Process keyphrase
+                keyphrase_ids, attention_mask_key = self.get_input_ids_and_att_mask(
+                    category_text + " | " + keyphrase_text, tokenizer, model_type
+                )
+
+                keyphrase_ids_list.append(keyphrase_ids)
+                attention_mask_key_list.append(attention_mask_key)
+
+                # Process categories
+                # category_ids, attention_mask_cat = self.get_input_ids_and_att_mask(
+                #     category_text, tokenizer, model_type
+                # )
+
+                # Process categories + keyphrase
+                # cat_key_ids, attention_mask_cat_key = self.get_input_ids_and_att_mask(
+                #     category_text + " | " + keyphrase_text, tokenizer, model_type
+                # )
+                
                 # Process labels
                 if item not in labels:
                     labels.append(item)
                 y.append(labels.index(item))
-        return input_ids_list, attention_mask_list, y, labels
+
+                # Process user_id
+                if user_id not in user_id_list:
+                    user_id_list.append(user_id)
+                user_labels.append(user_id_list.index(user_id))
+        return input_ids_list, attention_mask_list, y, labels, keyphrase_ids_list, attention_mask_key_list, user_labels, user_id_list
+
+    def get_input_ids_and_att_mask(self, text, tokenizer, model_type):
+        # Process text
+        tokenized_review = tokenizer.encode(text)
+        input_ids = tokenized_review
+        attention_mask = [1] * len(input_ids)
+
+        # Pad and create attention masks.
+        # Truncate if needed
+        padding_length = self.max_len - len(input_ids)
+        if "bert" in model_type:
+            padding_id = 0
+        elif 'gpt2' in model_type:
+            padding_id = 50256
+
+        if padding_length > 0:  # pad
+            input_ids = input_ids + ([padding_id] * padding_length)
+            attention_mask = attention_mask + ([0] * padding_length)
+        else:
+            input_ids = input_ids[0:self.max_len]
+            if 'bert' in model_type:
+                input_ids[-1] = 102
+            elif 'gpt2' in model_type:
+                input_ids[-1] = 50256
+            attention_mask = attention_mask[0:self.max_len]
+        return input_ids, attention_mask
+
 
     def get_item_dist(self):
         item_dist = {}
@@ -238,7 +348,6 @@ class Dataset:
         for txt in token_txt:
             aText_string = re.compile(re.escape(txt), re.IGNORECASE).sub('[MASK]', aText_string)
         return aText_string
-
 
 if __name__ == '__main__':
     Dataset = Dataset('toronto')
