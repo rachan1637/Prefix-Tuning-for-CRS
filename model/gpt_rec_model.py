@@ -1,9 +1,10 @@
 
 from sklearn.datasets import load_digits
-from transformers import GPT2PreTrainedModel
+from transformers import GPT2PreTrainedModel, GPT2Model
 import torch.nn as nn
 import torch
 from transformers.modeling_outputs import SequenceClassifierOutput
+from model.modeling_gpt2 import MyGPT2Model
 
 class MyGPT2ForSequenceCLassification(GPT2PreTrainedModel):
     def __init__(self, config):
@@ -11,10 +12,8 @@ class MyGPT2ForSequenceCLassification(GPT2PreTrainedModel):
         self.num_labels = config.num_labels
 
         if config.tuning_mode == "finetune":
-            from transformers import GPT2Model
             self.transformer = GPT2Model(config)
         elif config.tuning_mode == "prefixtune":
-            from modeling_gpt2 import GPT2Model
             self.transformer = GPT2Model(config)
         else:
             raise ValueError(f"Unrecognized tuning mode {config.tuning_mode}")

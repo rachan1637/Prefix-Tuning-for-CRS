@@ -283,7 +283,10 @@ def main():
     else:
         raise ValueError("The model type can only be bert or gpt2")
     
-    data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode) 
+    if model_args.tuning_mode == "prefixtune":
+        data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode, prefix_seq_len=model_args.prefix_seq_len) 
+    else:
+        data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode)
 
     def compute_metrics(eval_predictions: EvalPrediction):
         predictions = eval_predictions.predictions
@@ -311,7 +314,10 @@ def main():
             'MRR_0': mrr[0], 'MRR_1': mrr[1], 'HR@5': hit_rates5, 'HR@10': hit_rates10, 'HR@20': hit_rates20}
         return out
     
-    params = [p for p in model.parameters()]
+    params = [p for p in model.parameters() if p.requires_grad]
+    if model_args.tuning_mode == "prefixtune": 
+        name_params = [n for n, p in model.named_parameters() if p.requires_grad]
+        logger.info(f"All params that will be optimized are {name_params}")
     optimizer = Adam(params=params, lr=training_args.learning_rate)
     # scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
     scheduler = ConstantLR(optimizer)
@@ -322,7 +328,7 @@ def main():
         data_collator=data_collator,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
-        # optimizers=(optimizer, scheduler),
+        optimizers=(optimizer, scheduler),
         compute_metrics=compute_metrics
     )
 

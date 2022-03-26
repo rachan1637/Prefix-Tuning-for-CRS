@@ -135,6 +135,7 @@ class YelpRecDataset:
 @dataclass
 class DataCollatorForYelpRec:
     tuning_mode: None
+    prefix_seq_len: 0
         
     def __call__(self, examples):
         input_ids, attention_mask, labels, user_labels = zip(*examples)
@@ -143,6 +144,11 @@ class DataCollatorForYelpRec:
         input_ids = torch.stack(input_ids, dim=0)
         attention_mask = torch.stack(attention_mask, dim = 0)
         labels = torch.stack(labels, dim = 0)
+
+        if self.tuning_mode == "prefixtune" and self.prefix_seq_len > 0:
+            bs = input_ids.shape[0]
+            additional_att = torch.stack([torch.tensor([1] * self.prefix_seq_len)] * bs, dim = 0)
+            attention_mask = torch.concat([additional_att, attention_mask], dim = 1)
 
         if self.tuning_mode == "finetune":
             del user_labels

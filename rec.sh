@@ -4,10 +4,11 @@
 # export COMET_PROJECT_NAME=prefix-rec-exp
 # export COMET_WORKSPACE=rachan1637
 
-source ENV/bin/activate
+# source ENV/bin/activate
 
 model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/lmrec_toronto_reproduce
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bert_keyphrase_finetune
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune_5
+# output_dir=outputs/trash
 
 CUDA_LAUNCH_BLOCKING=1 python run.py \
   --model_name_or_path "gpt2" \
@@ -30,7 +31,7 @@ CUDA_LAUNCH_BLOCKING=1 python run.py \
   --num_labels 1121 \
   --input_data_mode keyphrase \
   --tuning_mode prefixtune \
-  --prefix_seq_len 1 \
+  --prefix_seq_len 5 \
   --mid_dim 512 \
-  --num_users 1
+  --num_users 1073
   # --num_users 1073 \

@@ -28,12 +28,12 @@ from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 from transformers.modeling_outputs import SequenceClassifierOutputWithPast
 
 from transformers.activations import ACT2FN
-from transformers.configuration_gpt2 import GPT2Config
+from transformers import GPT2Config
 from transformers.file_utils import (
     ModelOutput,
     add_code_sample_docstrings,
     add_start_docstrings,
-    add_start_docstrings_to_callable,
+    # add_start_docstrings_to_callable,
     replace_return_docstrings,
 )
 from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast
@@ -491,7 +491,7 @@ GPT2_INPUTS_DOCSTRING = r"""
     "The bare GPT2 Model transformer outputting raw hidden-states without any specific head on top.",
     GPT2_START_DOCSTRING,
 )
-class GPT2Model(GPT2PreTrainedModel):
+class MyGPT2Model(GPT2PreTrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
@@ -516,9 +516,9 @@ class GPT2Model(GPT2PreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.h[layer].attn.prune_heads(heads)
 
-    @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
+    # @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        # tokenizer_class=_TOKENIZER_FOR_DOC,
         checkpoint="gpt2",
         output_type=BaseModelOutputWithPast,
         config_class=_CONFIG_FOR_DOC,
@@ -837,9 +837,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
                 "use_cache": kwargs.get("use_cache"),
             }
 
-    @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
+    # @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        # tokenizer_class=_TOKENIZER_FOR_DOC,
         checkpoint="gpt2",
         output_type=CausalLMOutputWithPast,
         config_class=_CONFIG_FOR_DOC,
@@ -1063,9 +1063,9 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             attentions=transformer_outputs.attentions,
         )
 
-    @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
+    # @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
     @add_code_sample_docstrings(
-        tokenizer_class=_TOKENIZER_FOR_DOC,
+        # tokenizer_class=_TOKENIZER_FOR_DOC,
         checkpoint="gpt2",
         output_type=CausalLMOutputWithPast,
         config_class=_CONFIG_FOR_DOC,
@@ -1178,7 +1178,7 @@ class GPT2DoubleHeadsModel(GPT2PreTrainedModel):
             "use_cache": kwargs.get("use_cache"),
         }
 
-    @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
+    # @add_start_docstrings_to_callable(GPT2_INPUTS_DOCSTRING)
     @replace_return_docstrings(output_type=GPT2DoubleHeadsModelOutput, config_class=_CONFIG_FOR_DOC)
     def forward(
         self,

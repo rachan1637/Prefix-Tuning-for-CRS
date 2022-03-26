@@ -1,5 +1,6 @@
 dataset/
-bert-base-uncased/
+bert_base_uncased/
+gpt2-medium/
 __pycache__/
 env/
 ENV/
