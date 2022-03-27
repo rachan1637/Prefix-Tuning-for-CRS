@@ -38,7 +38,7 @@ class MyBartForSequenceClassification(BartPretrainedModel):
         super().__init__(config, **kwargs)
         self.model = BartModel(config)
         self.classification_head = BartClassificationHead(
-            intput_dim = config.d_model,
+            input_dim = config.d_model,
             inner_dim = 1024,
             num_classes = config.num_labels,
             pooler_dropout = config.classifier_dropout,

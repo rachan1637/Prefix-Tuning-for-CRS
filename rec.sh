@@ -7,18 +7,18 @@
 source ENV/bin/activate
 
 # model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/lmrec_reprod_check
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bert_keyphrase_finetune
-# output_dir=outputs/trash
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bart_keyphrase_finetune
+output_dir=outputs/trash
 
 CUDA_LAUNCH_BLOCKING=1 python run.py \
-  --model_name_or_path bert-base-uncased \
-  --model_type bert \
+  --model_name_or_path facebook/bart-base \
+  --model_type bart \
   --yelp_dataset_city toronto \
   --do_train \
   --do_eval \
   --do_predict \
-  --per_device_train_batch_size 20 \
-  --per_device_eval_batch_size 20 \
+  --per_device_train_batch_size 22 \
+  --per_device_eval_batch_size 22 \
   --learning_rate 5e-5 \
   --num_train_epochs 10 \
   --max_seq_length 400 \
