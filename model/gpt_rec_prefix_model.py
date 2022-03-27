@@ -41,10 +41,6 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
 
     def set_gpt2(self, gpt2_model):
         self.gpt2 = gpt2_model
-        # Freeze the gpt2 params
-        for n, param in self.gpt2.named_parameters():
-            if "transformer" in n:
-                param.requires_grad = False
         print("GPT2 is set")
 
     def get_prompt(self, user_labels, bsz=None):

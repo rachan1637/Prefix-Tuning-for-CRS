@@ -32,12 +32,19 @@ def load_dataset(X, y, max_samples, user_labels = None):
     else:
         input_ids, attention_mask, labels, user_labels = X[0], X[1], y, user_labels
         # input_ids, attention_mask, labels = X[0], X[1], y
-    dataset = {
-        "input_ids": torch.tensor(input_ids), 
-        "attention_mask": torch.tensor(attention_mask), 
-        "labels": torch.tensor(labels),
-        "user_labels": torch.tensor(user_labels)
-    }
+    if user_labels is not None:
+        dataset = {
+            "input_ids": torch.tensor(input_ids), 
+            "attention_mask": torch.tensor(attention_mask), 
+            "labels": torch.tensor(labels),
+            "user_labels": torch.tensor(user_labels)
+        }
+    else:
+        dataset = {
+            "input_ids": torch.tensor(input_ids), 
+            "attention_mask": torch.tensor(attention_mask), 
+            "labels": torch.tensor(labels),
+        }
     dataset = YelpRecDataset(dataset)
     return dataset
 
@@ -119,18 +126,29 @@ class YelpRecDataset:
         self.input_ids = input_dict['input_ids']
         self.attention_mask = input_dict['attention_mask']
         self.labels = input_dict['labels']
-        self.user_labels = input_dict['user_labels']
+        if "user_labels" in input_dict:
+            self.user_labels = input_dict['user_labels']
+            self.has_user_ids = True
+        else:
+            self.has_user_ids = False
 
     def __len__(self):
         return len(self.input_ids)
 
     def __getitem__(self, i):
-        return (
-            torch.tensor(self.input_ids[i], dtype=torch.long),
-            torch.tensor(self.attention_mask[i], dtype=torch.long),
-            torch.tensor(self.labels[i], dtype=torch.long),
-            torch.tensor(self.user_labels[i], dtype=torch.long)
-        )
+        if self.has_user_ids:
+            return (
+                torch.tensor(self.input_ids[i], dtype=torch.long),
+                torch.tensor(self.attention_mask[i], dtype=torch.long),
+                torch.tensor(self.labels[i], dtype=torch.long),
+                torch.tensor(self.user_labels[i], dtype=torch.long)
+            )
+        else:
+            return (
+                torch.tensor(self.input_ids[i], dtype=torch.long),
+                torch.tensor(self.attention_mask[i], dtype=torch.long),
+                torch.tensor(self.labels[i], dtype=torch.long)
+            )
 
 @dataclass
 class DataCollatorForYelpRec:
@@ -138,8 +156,10 @@ class DataCollatorForYelpRec:
     prefix_seq_len: 0
         
     def __call__(self, examples):
-        input_ids, attention_mask, labels, user_labels = zip(*examples)
-        # input_ids, attention_mask, labels = zip(*examples)
+        if len(examples[0]) == 4:
+            input_ids, attention_mask, labels, user_labels = zip(*examples)
+        else:
+            input_ids, attention_mask, labels = zip(*examples)
 
         input_ids = torch.stack(input_ids, dim=0)
         attention_mask = torch.stack(attention_mask, dim = 0)
@@ -151,7 +171,7 @@ class DataCollatorForYelpRec:
             attention_mask = torch.concat([additional_att, attention_mask], dim = 1)
 
         if self.tuning_mode == "finetune":
-            del user_labels
+            # del user_labels
             return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
         elif self.tuning_mode == "prefixtune":
             user_labels = torch.stack(user_labels, dim = 0)
@@ -159,7 +179,7 @@ class DataCollatorForYelpRec:
             # labels[labels == self.tokenizer.pad_token_id] = -100 # tgt
             return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels, "user_labels": user_labels}
         else:
-            raise ValueError("Please specify tuning mode to be finetune or prefixtune")
+            raise ValueError(f"Please specify tuning mode to be finetune or prefixtune other than {self.tuning_mode}")
 
 @dataclass
 class DataCollatorForMultiUserRecommendation:

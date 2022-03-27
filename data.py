@@ -59,7 +59,7 @@ names = set(line.strip() for line in open('names.txt'))
 
 
 class Dataset:
-    def __init__(self, dataset, model_type, csv_file = None, masking=False, max_len=400):
+    def __init__(self, dataset, model_type, csv_file = None, masking=False, max_len=400, reindex=True):
         if max_len != None:
             self.max_len = max_len
         self.dataset = dataset
@@ -76,7 +76,10 @@ class Dataset:
         else:
             df = df[['business_id', 'review_text', 'name', 'categories', 'keyphrase_list', 'user_id']]
         df.dropna(subset=['business_id', 'review_text', 'name', 'categories'], inplace=True)
-        self.df = df.sample(frac=1, random_state=1).reset_index(drop=True)
+        if reindex:
+            self.df = df.sample(frac=1, random_state=1).reset_index(drop=True)
+        else:
+            self.df = df
         self.item_dist = self.get_item_dist()
         input_ids_list, attention_mask_list, y, labels, keyphrase_ids_list, attention_mask_key_list, user_labels, user_id_list = \
             self.encode_data(model_type = model_type)
@@ -141,6 +144,8 @@ class Dataset:
             #     os.makedirs(save_path)
             # slow_tokenizer.save_pretrained(save_path)
             tokenizer = GPT2TokenizerFast.from_pretrained("gpt2-medium")
+        elif 'bart' in model_type:
+            tokenizer = BartTokenizerFast.from_pretrained("facebook/bart-base")
 
         with tqdm(total=len(data)) as pbar:
             for v in data:
@@ -235,6 +240,8 @@ class Dataset:
             padding_id = 0
         elif 'gpt2' in model_type:
             padding_id = 50256
+        elif 'bart' in model_type:
+            padding_id = 1
 
         if padding_length > 0:  # pad
             input_ids = input_ids + ([padding_id] * padding_length)
@@ -245,6 +252,8 @@ class Dataset:
                 input_ids[-1] = 102
             elif 'gpt2' in model_type:
                 input_ids[-1] = 50256
+            elif 'bart' in model_type:
+                input_ids[-1] = 2
             attention_mask = attention_mask[0:self.max_len]
         return input_ids, attention_mask
 

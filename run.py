@@ -94,6 +94,9 @@ def main():
         handlers=[logging.StreamHandler(sys.stdout)],
     )
 
+    logger.info(model_args)
+    logger.info(data_args)
+
     log_level = logging.INFO
     logger.setLevel(log_level)
     transformers.utils.logging.set_verbosity(log_level)
@@ -126,10 +129,13 @@ def main():
 
     # Data loading from LMRec
     if data_args.yelp_dataset_city is not None:
-        if "bert" in model_args.model_type: 
-            city_map = {"toronto": "dataset/yelp_toronto_selected_bert.pkl"}
-        elif "gpt2" in model_args.model_type:
+        if "bert" == model_args.model_type: 
+            city_map = {"toronto": "dataset/yelp_toronto_selected_bert_new.pkl"}
+        elif "gpt2" == model_args.model_type:
             city_map = {"toronto": "dataset/yelp_toronto_selected_gpt2.pkl"}
+        elif "bart" == model_args.model_type:
+            city_map = {"toronto": "dataset/yelp_toronto_selected_bart.pkl"}
+
         with open(city_map[data_args.yelp_dataset_city], "rb") as inp:
             dataset = pickle.load(inp)
         # dataset = Dataset(
@@ -158,7 +164,7 @@ def main():
                 train_dataset = load_dataset(
                     X = dataset.X_train, 
                     y = dataset.y_train, 
-                    user_labels = dataset.user_labels_train, 
+                    user_labels = dataset.user_labels_train,
                     max_samples = data_args.max_train_samples
                 )
             else:
@@ -253,6 +259,7 @@ def main():
             )
         else:
             model = MyBertForSequenceClassification(config)
+            logger.info("Initialize Bert for Rec successfully")
     elif model_args.model_type == "gpt2":
         if model_args.tuning_mode == "finetune":
             if model_args.model_name_or_path not in ["gpt2-medium", "gpt2"]:
@@ -265,6 +272,7 @@ def main():
                 )
             else:
                 model = MyGPT2ForSequenceCLassification(config)
+                logger.info("Initialize GPT2 for Rec successfully")
         elif model_args.tuning_mode == 'prefixtune':
             if model_args.model_name_or_path not in ["gpt2", "gpt2-medium"]:
                 model = Prefix_GPT2ForRec.from_pretrained(
@@ -275,18 +283,29 @@ def main():
                     revision=model_args.model_revision,
                     use_auth_token=True if model_args.use_auth_token else None,
                 )
+                logger.info("Load Prefix Tuning GPT2 for Rec successfully")
             else:
                 prefix_model = Prefix_GPT2ForRec(config)
                 model = MyGPT2ForSequenceCLassification(config)
+                # Freeze GPT2 Parameter
+                logger.info("Freeze gpt2 parameters")
+                for n, param in model.named_parameters():
+                    if "transformer" in n:
+                        param.requires_grad = False
                 prefix_model.set_gpt2(model)
                 model = prefix_model
+                logger.info("Initialize Prefix Tuning GPT2 for Rec successfully")
+        else:
+            raise ValueError(f"Please specify the tuning mode other than {model_args.tuning_mode}")
+    elif model_args.model_type == "bart":
+
     else:
-        raise ValueError("The model type can only be bert or gpt2")
+        raise ValueError("The model type can only be bert, gpt2 or bart")
     
-    if model_args.tuning_mode == "prefixtune":
-        data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode, prefix_seq_len=model_args.prefix_seq_len) 
-    else:
-        data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode)
+    # if model_args.tuning_mode == "prefixtune":
+    data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode, prefix_seq_len=model_args.prefix_seq_len) 
+    # else:
+    #     data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode)
 
     def compute_metrics(eval_predictions: EvalPrediction):
         predictions = eval_predictions.predictions
