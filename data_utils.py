@@ -154,6 +154,7 @@ class YelpRecDataset:
 class DataCollatorForYelpRec:
     tuning_mode: None
     prefix_seq_len: 0
+    model_type: None
         
     def __call__(self, examples):
         if len(examples[0]) == 4:
@@ -165,7 +166,8 @@ class DataCollatorForYelpRec:
         attention_mask = torch.stack(attention_mask, dim = 0)
         labels = torch.stack(labels, dim = 0)
 
-        if self.tuning_mode == "prefixtune" and self.prefix_seq_len > 0:
+        # In gpt2, we manually prepend the prefix_len * [1] the attention_mask
+        if self.tuning_mode == "prefixtune" and self.model_type == 'gpt2' and self.prefix_seq_len > 0:
             bs = input_ids.shape[0]
             additional_att = torch.stack([torch.tensor([1] * self.prefix_seq_len)] * bs, dim = 0)
             attention_mask = torch.concat([additional_att, attention_mask], dim = 1)

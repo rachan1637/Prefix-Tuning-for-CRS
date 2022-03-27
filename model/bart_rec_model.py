@@ -1,10 +1,10 @@
 from transformers import (
     BartPretrainedModel, 
     BartConfig, 
-    BartModel, 
 )
 
 from transformers.modeling_outputs import SequenceClassifierOutput
+from model.modeling_bart import BartModel
 
 import torch
 import torch.nn as nn
@@ -36,29 +36,30 @@ class BartClassificationHead(nn.Module):
 class MyBartForSequenceClassification(BartPretrainedModel):
     def __init__(self, config: BartConfig, **kwargs):
         super().__init__(config, **kwargs)
-        self.model = BartModel(config)
+        # It was 'self.model' when finetuning Bart
+        self.transformer = BartModel(config)
         self.classification_head = BartClassificationHead(
             input_dim = config.d_model,
             inner_dim = 1024,
             num_classes = config.num_labels,
             pooler_dropout = config.classifier_dropout,
         )
-        self.model._init_weights(self.classification_head.dense)
-        self.model._init_weights(self.classification_head.out_proj)
+        self.transformer._init_weights(self.classification_head.dense)
+        self.transformer._init_weights(self.classification_head.out_proj)
 
     def forward(
         self,
         input_ids,
         attention_mask,
         labels,
-        past_key_values = None,
+        past_prompt = None,
         **kwargs
     ):
 
-        outputs = self.model(
+        outputs = self.transformer(
             input_ids = input_ids, 
             attention_mask = attention_mask,
-            past_key_values=past_key_values,
+            past_prompt = past_prompt,
             **kwargs
         )
 

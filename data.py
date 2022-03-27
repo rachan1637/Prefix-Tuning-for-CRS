@@ -3,7 +3,7 @@ from tensorflow import keras
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
-from transformers import BertTokenizer, GPT2Tokenizer, GPT2TokenizerFast, BertTokenizerFast
+from transformers import GPT2TokenizerFast, BertTokenizerFast, BartTokenizerFast
 from tokenizers import BertWordPieceTokenizer
 import os
 import re

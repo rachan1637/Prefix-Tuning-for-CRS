@@ -61,6 +61,7 @@ from data_utils import (
 )
 
 from arguments import ModelArguments, DataTrainingArguments
+from model.bart_rec_prefix_model import Prefix_BartForRec
 from model.bert_rec_model import MyBertForSequenceClassification
 from model.gpt_rec_model import MyGPT2ForSequenceCLassification
 from model.gpt_rec_prefix_model import Prefix_GPT2ForRec
@@ -213,8 +214,11 @@ def main():
     )
 
     # This section is to set up some other attributes in model config
-    if model_args.model_type == 'gpt2':
-        config.pad_token_id = 50256
+    if model_args.model_type in ['gpt2', 'bart']:
+        if model_args.model_type == 'gpt2':
+            config.pad_token_id = 50256
+        elif model_args.model_type == "bart":
+            config.pad_token_id = 1
         
         if model_args.tuning_mode == "prefixtune":
             if model_args.num_users == 0:
@@ -309,11 +313,26 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
+        elif model_args.tuning_mode == "prefixtune":
+            prefix_model = Prefix_BartForRec(config)
+            model = MyBartForSequenceClassification(config)
+            # Freeze Bart Parameter
+            logger.info("Freeze Bart parameters")
+            for n, param in model.named_parameters():
+                    if "transformer" in n:
+                        param.requires_grad = False
+            prefix_model.set_bart(model)
+            model = prefix_model
+            logger.info("Initialize Prefix Tuning Bart for Rec successfully")
     else:
         raise ValueError("The model type can only be bert, gpt2 or bart")
     
     # if model_args.tuning_mode == "prefixtune":
-    data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode, prefix_seq_len=model_args.prefix_seq_len) 
+    data_collator = DataCollatorForYelpRec(
+        tuning_mode = model_args.tuning_mode, 
+        prefix_seq_len = model_args.prefix_seq_len,
+        model_type = model_args.model_type
+    ) 
     # else:
     #     data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode)
 

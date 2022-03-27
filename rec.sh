@@ -7,8 +7,8 @@
 source ENV/bin/activate
 
 # model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/lmrec_reprod_check
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bart_keyphrase_finetune
-output_dir=outputs/trash
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bart_keyphrase_prefixtune_len_5
+# output_dir=outputs/trash
 
 CUDA_LAUNCH_BLOCKING=1 python run.py \
   --model_name_or_path facebook/bart-base \
@@ -30,8 +30,8 @@ CUDA_LAUNCH_BLOCKING=1 python run.py \
   --load_best_model_at_end \
   --num_labels 1121 \
   --input_data_mode keyphrase \
-  --tuning_mode finetune 
-  # --prefix_seq_len 5 \
-  # --mid_dim 512 \
-  # --num_users 1073
+  --tuning_mode prefixtune \
+  --prefix_seq_len 5 \
+  --mid_dim 512 \
+  --num_users 1073
   # --num_users 1073 \

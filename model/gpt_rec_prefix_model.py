@@ -16,14 +16,13 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
 
         self.mid_dim = config.mid_dim
 
-        if True:
-            print('[Full prefix-tuning Setting :) ]')
-            # self.input_tokens = torch.arange(self.preseqlen).long()
-            self.wte = nn.Embedding(self.preseqlen * self.num_users, config.n_embd)
-            self.control_trans = nn.Sequential(
-                nn.Linear(config.n_embd, self.mid_dim),
-                nn.Tanh(),
-                nn.Linear(self.mid_dim, config.n_layer * 2 * config.n_embd))
+        print('[Full prefix-tuning Setting :) ]')
+        # self.input_tokens = torch.arange(self.preseqlen).long()
+        self.wte = nn.Embedding(self.preseqlen * self.num_users, config.n_embd)
+        self.control_trans = nn.Sequential(
+            nn.Linear(config.n_embd, self.mid_dim),
+            nn.Tanh(),
+            nn.Linear(self.mid_dim, config.n_layer * 2 * config.n_embd))
         
         # Here we set prefix dropout prob = 0.4
         self.prefix_dropout = 0.4
@@ -34,7 +33,7 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
         for name, param in self.named_parameters():
             # print(param.shape)
             total_param += param.numel()
-        # print('total param is {}'.format(total_param))
+        print('total param is {}'.format(total_param))
 
         self.model_parallel = False
         self.device_map = None
@@ -45,7 +44,9 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
 
     def get_prompt(self, user_labels, bsz=None):
         if self.num_users != 1:
-            input_tokens = torch.stack([torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels], dim = 0).to(self.device)
+            input_tokens = torch.stack(
+                [torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels], dim = 0
+            ).to(self.device)
         else:
             input_tokens = torch.arange(self.preseqlen).long()
             input_tokens = input_tokens.unsqueeze(0).expand(bsz, -1).to(self.device)
