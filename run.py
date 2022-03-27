@@ -64,6 +64,7 @@ from arguments import ModelArguments, DataTrainingArguments
 from model.bert_rec_model import MyBertForSequenceClassification
 from model.gpt_rec_model import MyGPT2ForSequenceCLassification
 from model.gpt_rec_prefix_model import Prefix_GPT2ForRec
+from model.bart_rec_model import MyBartForSequenceClassification
 # from metrics import f1_recall_precision_metric
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -298,7 +299,14 @@ def main():
         else:
             raise ValueError(f"Please specify the tuning mode other than {model_args.tuning_mode}")
     elif model_args.model_type == "bart":
-
+        if model_args.tuning_mode == "finetune":
+            model = MyBartForSequenceCLassification.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                use_auth_token=True if model_args.use_auth_token else None,
+            )
     else:
         raise ValueError("The model type can only be bert, gpt2 or bart")
     
