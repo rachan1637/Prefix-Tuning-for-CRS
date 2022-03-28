@@ -132,7 +132,7 @@ def main():
     # Data loading from LMRec
     if data_args.yelp_dataset_city is not None:
         if "bert" == model_args.model_type: 
-            city_map = {"toronto": "dataset/yelp_toronto_selected_bert_new.pkl"}
+            city_map = {"toronto": "dataset/yelp_toronto_selected_bert.pkl"}
         elif "gpt2" == model_args.model_type:
             city_map = {"toronto": "dataset/yelp_toronto_selected_gpt2.pkl"}
         elif "bart" == model_args.model_type:
@@ -290,15 +290,13 @@ def main():
                 )
                 logger.info("Load Prefix Tuning GPT2 for Rec successfully")
             else:
-                prefix_model = Prefix_GPT2ForRec(config)
-                model = MyGPT2ForSequenceCLassification(config)
                 # Freeze GPT2 Parameter
+                model = MyGPT2ForSequenceCLassification(config)
                 logger.info("Freeze gpt2 parameters")
                 for n, param in model.named_parameters():
                     if "transformer" in n:
                         param.requires_grad = False
-                prefix_model.set_gpt2(model)
-                model = prefix_model
+                model = Prefix_GPT2ForRec(config, model)
                 logger.info("Initialize Prefix Tuning GPT2 for Rec successfully")
         else:
             raise ValueError(f"Please specify the tuning mode other than {model_args.tuning_mode}")
@@ -314,16 +312,25 @@ def main():
                 use_auth_token=True if model_args.use_auth_token else None,
             )
         elif model_args.tuning_mode == "prefixtune":
-            prefix_model = Prefix_BartForRec(config)
-            model = MyBartForSequenceClassification(config)
-            # Freeze Bart Parameter
-            logger.info("Freeze Bart parameters")
-            for n, param in model.named_parameters():
-                    if "transformer" in n:
-                        param.requires_grad = False
-            prefix_model.set_bart(model)
-            model = prefix_model
-            logger.info("Initialize Prefix Tuning Bart for Rec successfully")
+            if model_args.model_name_or_path not in ['facebook/bart-base']:
+                model = Prefix_BartForRec.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+                logger.info("Load Prefix Tuning Bart for Rec successfully")
+            else:
+                model = MyBartForSequenceClassification(config)
+                # Freeze Bart Parameter
+                logger.info("Freeze Bart parameters")
+                for n, param in model.named_parameters():
+                        if "transformer" in n:
+                            param.requires_grad = False
+                model = Prefix_BartForRec(config, model)
+                logger.info("Initialize Prefix Tuning Bart for Rec successfully")
     else:
         raise ValueError("The model type can only be bert, gpt2 or bart")
     
@@ -357,6 +364,8 @@ def main():
         hit_rates20 = top_k_accuracy_score(y_true, y_pred, k=20, labels = range(model_args.num_labels))
         accuracy = top_k_accuracy_score(y_true, y_pred, k=1, labels = range(model_args.num_labels)) 
         mrr = mean_reciprocal_rank(y_true, y_pred)
+
+        import pdb; pdb.set_trace()
 
         out = {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy,
             'MRR_0': mrr[0], 'MRR_1': mrr[1], 'HR@5': hit_rates5, 'HR@10': hit_rates10, 'HR@20': hit_rates20}

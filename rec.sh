@@ -6,13 +6,13 @@
 
 source ENV/bin/activate
 
-# model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/lmrec_reprod_check
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bart_keyphrase_prefixtune_len_5
+# model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune
 # output_dir=outputs/trash
 
 CUDA_LAUNCH_BLOCKING=1 python run.py \
-  --model_name_or_path facebook/bart-base \
-  --model_type bart \
+  --model_name_or_path gpt2 \
+  --model_type gpt2 \
   --yelp_dataset_city toronto \
   --do_train \
   --do_eval \
@@ -33,5 +33,5 @@ CUDA_LAUNCH_BLOCKING=1 python run.py \
   --tuning_mode prefixtune \
   --prefix_seq_len 5 \
   --mid_dim 512 \
-  --num_users 1073
+  --num_users 1073 
   # --num_users 1073 \

@@ -6,7 +6,7 @@ import torch
 
 class Prefix_BartForRec(PretrainedBartModel):
     """Prefix tuning for bart classification model"""
-    def __init__(self, config):
+    def __init__(self, config, bart_model):
         super().__init__(config)
         print('under the PrefixTuning model')
 
@@ -22,6 +22,8 @@ class Prefix_BartForRec(PretrainedBartModel):
 
         self.prefix_dropout = 0.4
         self.dropout = nn.Dropout(self.prefix_dropout)
+
+        self.bart = bart_model
 
         self.wte = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
         self.control_trans = nn.Sequential(
@@ -50,10 +52,6 @@ class Prefix_BartForRec(PretrainedBartModel):
             # print(param.shape)
             total_param += param.numel()
         print('total param is {}'.format(total_param))
-
-    def set_bart(self, bart_model):
-        self.bart = bart_model
-        print("GPT2 is set")
     
     def get_prompt(self, user_labels, bsz=None, sample_size=1):
         # Sample size is used when decoding strategy is beam decoding

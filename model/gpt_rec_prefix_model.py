@@ -4,7 +4,7 @@ from torch import  nn
 
 class Prefix_GPT2ForRec(GPT2PreTrainedModel):
     """Prefix tuning for GPT2 classification model"""
-    def __init__(self, config):
+    def __init__(self, config, gpt2_model):
         super().__init__(config)
         self.match_n_layer = config.n_layer
         self.match_n_head = config.n_head
@@ -15,6 +15,8 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
         self.num_users = config.num_users
 
         self.mid_dim = config.mid_dim
+
+        self.gpt2 = gpt2_model
 
         print('[Full prefix-tuning Setting :) ]')
         # self.input_tokens = torch.arange(self.preseqlen).long()
@@ -37,10 +39,6 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
 
         self.model_parallel = False
         self.device_map = None
-
-    def set_gpt2(self, gpt2_model):
-        self.gpt2 = gpt2_model
-        print("GPT2 is set")
 
     def get_prompt(self, user_labels, bsz=None):
         if self.num_users != 1:

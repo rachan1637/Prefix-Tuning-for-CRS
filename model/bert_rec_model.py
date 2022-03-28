@@ -12,7 +12,7 @@ class MyBertForSequenceClassification(BertPreTrainedModel):
         # print(config)
         self.config = config
 
-        self.bert = AutoModel.from_pretrained("bert-base-uncased")
+        self.bert = AutoModel.from_pretrained(config)
         self.dropout = nn.Dropout(0.4)
 
         self.classifier1 = nn.Sequential(
