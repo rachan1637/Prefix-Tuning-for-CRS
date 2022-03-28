@@ -365,8 +365,6 @@ def main():
         accuracy = top_k_accuracy_score(y_true, y_pred, k=1, labels = range(model_args.num_labels)) 
         mrr = mean_reciprocal_rank(y_true, y_pred)
 
-        import pdb; pdb.set_trace()
-
         out = {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy,
             'MRR_0': mrr[0], 'MRR_1': mrr[1], 'HR@5': hit_rates5, 'HR@10': hit_rates10, 'HR@20': hit_rates20}
         return out
