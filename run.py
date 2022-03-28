@@ -118,7 +118,7 @@ def main():
 
     # Data loading from LMRec
     if data_args.yelp_dataset_city is not None:
-        city_map = {"toronto": "dataset/yelp_toronto.pkl"}
+        city_map = {"toronto": "dataset/yelp_toronto_selected_bert.pkl"}
         with open(city_map[data_args.yelp_dataset_city], "rb") as inp:
             dataset = pickle.load(inp)
         # dataset = Dataset(data_args.yelp_dataset_city, masking=True)
@@ -129,7 +129,7 @@ def main():
                 max_train_samples = data_args.max_train_samples
                 input_ids, attention_mask, labels = dataset.X_train[0][:max_train_samples], dataset.X_train[1][:max_train_samples], dataset.y_train[:max_train_samples]
             else:
-                input_ids, attention_mask, labels = dataset.X_train[0], dataset.X_train[1], dataset.y_train
+                input_ids, attention_mask, labels = dataset.X_key_train[0], dataset.X_key_train[1], dataset.y_train
             train_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
             train_dataset = YelpRecDataset(train_dataset)
         if training_args.do_eval:
@@ -137,7 +137,7 @@ def main():
                 max_eval_samples = data_args.max_eval_samples
                 input_ids, attention_mask, labels = dataset.X_eval[0][:max_eval_samples], dataset.X_eval[1][:max_eval_samples], dataset.y_eval[:max_eval_samples]
             else:
-                input_ids, attention_mask, labels = dataset.X_eval[0], dataset.X_eval[1], dataset.y_eval
+                input_ids, attention_mask, labels = dataset.X_key_eval[0], dataset.X_key_eval[1], dataset.y_eval
             eval_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
             eval_dataset = YelpRecDataset(eval_dataset)
         if training_args.do_predict:
@@ -145,7 +145,7 @@ def main():
                 max_predict_samples = data_args.max_predict_samples
                 input_ids, attention_mask, labels = dataset.X_test[0][:max_predict_samples], dataset.X_test[1][:max_predict_samples], dataset.y_test[:max_predict_samples]
             else:
-                input_ids, attention_mask, labels = dataset.X_test[0], dataset.X_test[1], dataset.y_test
+                input_ids, attention_mask, labels = dataset.X_key_test[0], dataset.X_key_test[1], dataset.y_test
             test_dataset = {"input_ids": torch.tensor(input_ids), "attention_mask": torch.tensor(attention_mask), "labels": torch.tensor(labels)}
             test_dataset = YelpRecDataset(test_dataset)
 
@@ -242,10 +242,10 @@ def main():
         recall = recall_score(y_true = y_true, y_pred = np.argmax(y_pred, axis=1), average="weighted")
         precision = precision_score(y_true = y_true, y_pred = np.argmax(y_pred, axis=1), average="weighted")
 
-        hit_rates5 = top_k_accuracy_score(y_true, y_pred, k=5)
-        hit_rates10 = top_k_accuracy_score(y_true, y_pred, k=10)
-        hit_rates20 = top_k_accuracy_score(y_true, y_pred, k=20)
-        accuracy = top_k_accuracy_score(y_true, y_pred, k=1)
+        hit_rates5 = top_k_accuracy_score(y_true, y_pred, k=5, labels = range(model_args.num_labels))
+        hit_rates10 = top_k_accuracy_score(y_true, y_pred, k=10, labels = range(model_args.num_labels))
+        hit_rates20 = top_k_accuracy_score(y_true, y_pred, k=20, labels = range(model_args.num_labels))
+        accuracy = top_k_accuracy_score(y_true, y_pred, k=1, labels = range(model_args.num_labels))
         mrr = mean_reciprocal_rank(y_true, y_pred)
 
         out = {'precision': precision, 'recall': recall, 'f1': f1, 'accuracy': accuracy,

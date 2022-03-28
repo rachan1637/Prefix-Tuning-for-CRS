@@ -6,7 +6,7 @@
 
 source ENV/bin/activate
 
-output_dir=outputs/lmrec_toronto_reproduce_ep15
+output_dir=outputs/test
 
 python run.py \
   --model_name_or_path bert-base-uncased \
@@ -14,10 +14,10 @@ python run.py \
   --do_train \
   --do_eval \
   --do_predict \
-  --per_device_train_batch_size 14 \
-  --per_device_eval_batch_size 14 \
+  --per_device_train_batch_size 22 \
+  --per_device_eval_batch_size 22 \
   --learning_rate 5e-5 \
-  --num_train_epochs 15 \
+  --num_train_epochs 10 \
   --max_seq_length 400 \
   --evaluation_strategy="epoch" \
   --output_dir ${output_dir} \
