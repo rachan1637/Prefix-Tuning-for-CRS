@@ -53,16 +53,15 @@ locations = {"Spring lake", "Saintjohns", "Riverside", "Mercy drive", "Allandale
 
 # if not os.path.isfile("names.txt"):
 #     wget.download("https://raw.githubusercontent.com/rbouadjenek/SIGIR22_LMRec/main/names.txt")
-names = set(line.strip() for line in open('names.txt'))
+# names = set(line.strip() for line in open('names.txt'))
 # stopwords = stopwords.words('english')
 # nltk.download('punkt')
 
 
 class Dataset:
-    def __init__(self, dataset, model_type, csv_file = None, masking=False, max_len=400, reindex=True):
+    def __init__(self, model_type, csv_file = None, masking=False, max_len=400, reindex=True):
         if max_len != None:
             self.max_len = max_len
-        self.dataset = dataset
         self.masking = masking
         if csv_file is None:
             dataset_path = self.data_path()
@@ -84,39 +83,184 @@ class Dataset:
         input_ids_list, attention_mask_list, y, labels, keyphrase_ids_list, attention_mask_key_list, user_labels, user_id_list = \
             self.encode_data(model_type = model_type)
         self.num_labels = len(labels)
-        train_size = int(len(y) * 0.8)
-        eval_size = int(len(y) * 0.1)
+        self.train_size = int(len(y) * 0.8)
+        self.eval_size = int(len(y) * 0.1)
 
         self.labels = labels
-        self.X_train = [np.array(input_ids_list[0:train_size]), np.array(attention_mask_list[0:train_size])]
-        self.y_train = np.array(y[0:train_size])
+        self.X_train = [np.array(input_ids_list[0:self.train_size]), np.array(attention_mask_list[0:self.train_size])]
+        self.y_train = np.array(y[0:self.train_size])
 
-        self.X_eval = [np.array(input_ids_list[train_size:train_size + eval_size]),
-                       np.array(attention_mask_list[train_size:train_size + eval_size])]
-        self.y_eval = np.array(y[train_size:train_size + eval_size])
+        self.X_eval = [np.array(input_ids_list[self.train_size:self.train_size + self.eval_size]),
+                       np.array(attention_mask_list[self.train_size:self.train_size + self.eval_size])]
+        self.y_eval = np.array(y[self.train_size:self.train_size + self.eval_size])
 
-        self.X_test = [np.array(input_ids_list[train_size + eval_size:]),
-                       np.array(attention_mask_list[train_size + eval_size:])]
-        self.y_test = np.array(y[train_size + eval_size:])
+        self.X_test = [np.array(input_ids_list[self.train_size + self.eval_size:]),
+                       np.array(attention_mask_list[self.train_size + self.eval_size:])]
+        self.y_test = np.array(y[self.train_size + self.eval_size:])
 
         self.X_key_train = [
-            np.array(keyphrase_ids_list[: train_size]), 
-            np.array(attention_mask_key_list[: train_size])
+            np.array(keyphrase_ids_list[: self.train_size]), 
+            np.array(attention_mask_key_list[: self.train_size])
         ]
         self.X_key_eval = [
-            np.array(keyphrase_ids_list[train_size : train_size + eval_size]), 
-            np.array(attention_mask_key_list[train_size : train_size + eval_size])
+            np.array(keyphrase_ids_list[self.train_size : self.train_size + self.eval_size]), 
+            np.array(attention_mask_key_list[self.train_size : self.train_size + self.eval_size])
         ]
         self.X_key_test = [
-            np.array(keyphrase_ids_list[train_size+eval_size :]), 
-            np.array(attention_mask_key_list[train_size + eval_size :])
+            np.array(keyphrase_ids_list[self.train_size+self.eval_size :]), 
+            np.array(attention_mask_key_list[self.train_size + self.eval_size :])
         ]
 
-        self.user_labels_train = np.array(user_labels[:train_size])
-        self.user_labels_eval = np.array(user_labels[train_size : train_size + eval_size])
-        self.user_labels_test = np.array(user_labels[train_size + eval_size:])
+        self.user_labels_train = np.array(user_labels[:self.train_size])
+        self.user_labels_eval = np.array(user_labels[self.train_size : self.train_size + self.eval_size])
+        self.user_labels_test = np.array(user_labels[self.train_size + self.eval_size:])
+
+        self.user_id_list = user_id_list
         # Extract categories
         self.business_to_categories = self.get_business_to_categories()
+
+    def resize(self, new_train_size, new_eval_size):
+        """ The function is designed to resize the dataset from a particular csv file
+        Goal: Gaurantee the train, eval, test size are exactly the same as the one in the combined model training.
+
+        - This is used when we want to get the dataset for a particular user and train a single user model.
+        - In combined training, the dataset size is larger (since it contains all users' reviews).
+        - Hence, the split for a single user's review won't be the same as the split we only input the single user's csv.
+        - However, as long as we don't shuffle the dataset when taking the single user's split,
+          the single user's split can become the same as combined split, by slicing the df with the combined split size.
+        """
+        # Swap eval and test if size of eval is 0
+        if len(self.y_eval) == 0:
+            self.X_eval, self.X_test = self.X_test, self.X_eval
+            self.X_key_eval, self.X_key_test = self.X_key_test, self.X_key_eval
+            self.y_eval, self.y_test = self.y_test, self.y_eval
+            self.user_labels_eval, self.user_labels_test = self.user_labels_test, self.user_labels_eval
+
+        # Resize train and eval
+        if new_train_size < self.train_size:
+            new_X_train = self.X_train[0][:new_train_size], self.X_train[1][:new_train_size]
+            new_X_key_train = self.X_key_train[0][:new_train_size], self.X_key_train[1][:new_train_size]
+            new_y_train = self.y_train[:new_train_size]
+            new_user_labels_train = self.user_labels_train[:new_train_size]
+
+            new_X_eval = (
+                np.concatenate([self.X_train[0][new_train_size:], self.X_eval[0]], axis=0),
+                np.concatenate([self.X_train[1][new_train_size:], self.X_eval[1]], axis=0),
+            )
+            new_X_key_eval = (
+                np.concatenate([self.X_key_train[0][new_train_size:], self.X_key_eval[0]], axis=0),
+                np.concatenate([self.X_key_train[1][new_train_size:], self.X_key_eval[1]], axis=0),
+            )
+            new_y_eval = np.concatenate([self.y_train[new_train_size:], self.y_eval])
+            new_user_labels_eval = np.concatenate([self.user_labels_train[new_train_size:], self.user_labels_eval])
+        
+            self.X_train = new_X_train
+            self.X_key_train = new_X_key_train
+            self.y_train = new_y_train
+            self.user_labels_train = new_user_labels_train
+        elif new_train_size > self.train_size:
+            add_train_size = new_train_size - self.train_size
+
+            new_X_train = (
+                np.concatenate([self.X_train[0], self.X_eval[0][:add_train_size]], axis=0),
+                np.concatenate([self.X_train[1], self.X_eval[1][:add_train_size]], axis=0),
+            )
+            new_X_key_train = (
+                np.concatenate([self.X_key_train[0], self.X_key_eval[0][:add_train_size]], axis=0),
+                np.concatenate([self.X_key_train[1], self.X_key_eval[1][:add_train_size]], axis=0),
+            )
+            new_y_train = np.concatenate([self.y_train, self.y_eval[:add_train_size]])
+            new_user_labels_train = np.concatenate([self.user_labels_train, self.user_labels_eval[:add_train_size]])
+
+            new_X_eval = self.X_eval[0][add_train_size:], self.X_eval[1][add_train_size:]
+            new_X_key_eval = self.X_key_eval[0][add_train_size:], self.X_key_eval[1][add_train_size:]
+            new_y_eval = self.y_eval[add_train_size:]
+            new_user_labels_eval = self.user_labels_eval[add_train_size:]
+
+            self.X_train = new_X_train
+            self.X_key_train = new_X_key_train
+            self.y_train = new_y_train
+            self.user_labels_train = new_user_labels_train
+        else:
+            print("No change in train size")
+            new_X_eval = self.X_eval
+            new_X_key_eval = self.X_key_eval
+            new_y_eval = self.y_eval
+            new_user_labels_eval = self.user_labels_eval
+
+        # Swap new_eval and test if size of new_eval is 0
+        if len(new_y_eval) == 0:
+            new_X_eval, self.X_test = self.X_test, new_X_eval
+            new_X_key_eval, self.X_key_test = self.X_key_test, new_X_key_eval
+            new_y_eval, self.y_test = self.y_test, new_y_eval
+            new_user_labels_eval, self.user_labels_test = self.user_labels_test, new_user_labels_eval
+
+        # Resize eval and test
+        if new_eval_size < len(new_y_eval):
+            self.X_eval = new_X_eval[0][:new_eval_size], new_X_eval[1][:new_eval_size]
+            self.X_key_eval = new_X_key_eval[0][:new_eval_size], new_X_key_eval[1][:new_eval_size]
+            self.y_eval = new_y_eval[:new_eval_size]
+            self.user_labels_eval = new_user_labels_eval[:new_eval_size]
+
+            if len(self.y_test) == 0:
+                self.X_test = (
+                    new_X_eval[0][new_eval_size:], new_X_eval[1][new_eval_size:]
+                )
+                self.X_key_test = (
+                    new_X_key_eval[0][new_eval_size:], new_X_key_eval[1][new_eval_size:]
+                )
+                self.y_test = new_y_eval[new_eval_size:]
+                self.user_labels_test = new_user_labels_eval[new_eval_size:]
+            else:
+                self.X_test = (
+                    np.concatenate([new_X_eval[0][new_eval_size:], self.X_test[0]], axis=0),
+                    np.concatenate([new_X_eval[1][new_eval_size:], self.X_test[1]], axis=0),
+                )
+                self.X_key_test = (
+                    np.concatenate([new_X_key_eval[0][new_eval_size:], self.X_key_test[0]]),
+                    np.concatenate([new_X_key_eval[1][new_eval_size:], self.X_key_test[1]]),
+                )
+                self.y_test = np.concatenate([new_y_eval[new_eval_size:], self.y_test])
+                self.user_labels_test = np.concatenate([new_user_labels_eval[new_eval_size:], self.user_labels_test])
+        elif new_eval_size > len(new_y_eval):
+            add_eval_size = new_eval_size - len(new_y_eval)
+
+            if len(self.y_test) == 0:
+                # This case shouldn't occur
+                raise NotImplementedError("This case shouldn't occur, the dataset is not fully resized under the case")
+                self.X_eval = (
+                    self.X_test[0][:add_eval_size], self.X_test[1][:add_eval_size]
+                )
+
+                self.X_key_eval = (
+                    self.X_key_test[0][:add_eval_size], self.X_key_test[1][:add_eval_size]
+                )
+
+                self.y_eval = self.y_test[:add_eval_size]
+                self.user_labels_eval = self.user_labels_test[:add_eval_size]
+            else:
+                self.X_eval = (
+                    np.concatenate([new_X_eval[0], self.X_test[0][:add_eval_size]], axis=0),
+                    np.concatenate([new_X_eval[1], self.X_test[1][:add_eval_size]], axis=0),
+                )
+                self.X_key_eval = (
+                    np.concatenate([new_X_key_eval[0], self.X_key_test[0][:add_eval_size]], axis=0),
+                    np.concatenate([new_X_key_eval[1], self.X_key_test[1][:add_eval_size]], axis=0),
+                )
+                self.y_eval = np.concatenate([new_y_eval, self.y_test[:add_eval_size]])
+                self.user_labels_eval = np.concatenate([new_user_labels_eval, self.user_labels_test[:add_eval_size]])
+
+            self.X_test = (
+                self.X_test[0][add_eval_size:], self.X_test[1][add_eval_size:]
+            )
+            self.X_key_test = (
+                self.X_key_test[0][add_eval_size:], self.X_key_test[1][add_eval_size:]
+            )
+            self.y_test = self.y_test[add_eval_size:]
+            self.user_labels_test = self.user_labels_test[add_eval_size:]
+        else:
+            print("No change in eval and test size")
+
 
     def encode_data(self, model_type):
         labels = []
@@ -152,9 +296,10 @@ class Dataset:
                 pbar.update(1)
                 item = v[0]
                 review_text = v[1]
-                user_id = v[2]
+                business_name = v[2]
                 name = v[3]
                 k_list = literal_eval(v[4])
+                user_id = v[5]
                 #TODO the min review check is removed since we already check it 
                 # check if enough review for the item
                 # if self.item_dist[item] < self.min_reviews:
@@ -168,7 +313,7 @@ class Dataset:
                 # if self.masking:
                 #     review_text = self.mask_entities(review_text)
 
-                # Process keyphrase
+                # Process category by removing weird characters
                 categories = name.split()
                 remove_list = [",", "(", ")", "/"]
                 for i in range(len(categories)):
@@ -179,6 +324,7 @@ class Dataset:
 
                 category_text = " : ".join(categories)
 
+                # Remove duplicate keyphrase
                 keyphrase_text = ""
                 duplicate_key_list = []
                 for keyphrase in k_list:
@@ -273,49 +419,6 @@ class Dataset:
                     item_dist[item] = 1
         return item_dist
 
-    def data_path(self):
-        if self.dataset == 'atlanta':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Atlanta_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Atlanta_reviews.csv', data_url, untar=True)
-            self.min_reviews = 70
-            self.max_len = 400
-        elif self.dataset == 'austin':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Austin_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Austin_reviews.csv', data_url, untar=True)
-            self.min_reviews = 60
-            self.max_len = 400
-        elif self.dataset == 'boston':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Boston_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Boston_reviews.csv', data_url, untar=True)
-            self.min_reviews = 115
-            self.max_len = 500
-        elif self.dataset == 'cambridge':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Cambridge_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Cambridge_reviews.csv', data_url, untar=True)
-            self.min_reviews = 60
-            self.max_len = 400
-        elif self.dataset == 'columbus':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Columbus_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Columbus_reviews.csv', data_url, untar=True)
-            self.min_reviews = 50
-            self.max_len = 400
-        elif self.dataset == 'orlando':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Orlando_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Orlando_reviews.csv', data_url, untar=True)
-            self.min_reviews = 65
-            self.max_len = 400
-        elif self.dataset == 'portland':
-            data_url = 'http://206.12.93.90:8080/yelp_data/Portland_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Portland_reviews.csv', data_url, untar=True)
-            self.min_reviews = 50
-            self.max_len = 400
-        else:
-            data_url = 'http://206.12.93.90:8080/yelp_data/Toronto_reviews.tar.gz'
-            dataset_path = keras.utils.get_file('Toronto_reviews.csv', data_url, untar=True)
-            self.min_reviews = 100
-            self.max_len = 400
-        return dataset_path
-
     def get_business_to_categories(self):
         business_to_categories = {}
         for business_id, categories in zip(self.df['business_id'], self.df['categories']):
@@ -327,36 +430,6 @@ class Dataset:
                 categories = categories | business_to_categories[business_id]
             business_to_categories[business_id] = categories
         return business_to_categories
-
-    def multireplace(self, string, replacements={'/': ',', '(': ',', ')': ''}):
-        """
-        Given a string and a replacement map, it returns the replaced string.
-        :param str string: string to execute replacements on
-        :param dict replacements: replacement dictionary {value to find: value to replace}
-        :rtype: str
-        """
-        # Place longer ones first to keep shorter substrings from matching
-        # where the longer ones should take place
-        # For instance given the replacements {'ab': 'AB', 'abc': 'ABC'} against
-        # the string 'hey abc', it should produce 'hey ABC' and not 'hey ABc'
-        substrs = sorted(replacements, key=len, reverse=True)
-
-        # Create a big OR regex that matches any of the substrings to replace
-        regexp = re.compile('|'.join(map(re.escape, substrs)))
-
-        # For each match, look up the new string in the replacements
-        return regexp.sub(lambda match: replacements[match.group(0)], string)
-
-    def mask_entities(self, aText_string, exlusion_list=[]):
-        exlusion_list = [t.lower() for t in exlusion_list]
-        tokenized_text = word_tokenize(aText_string)
-        token_txt = set([txt.capitalize() for txt in tokenized_text if txt.lower() not in stopwords
-                         and txt.lower() not in exlusion_list])
-
-        token_txt = token_txt.intersection(names.union(relations, locations))
-        for txt in token_txt:
-            aText_string = re.compile(re.escape(txt), re.IGNORECASE).sub('[MASK]', aText_string)
-        return aText_string
 
 if __name__ == '__main__':
     Dataset = Dataset('toronto')
