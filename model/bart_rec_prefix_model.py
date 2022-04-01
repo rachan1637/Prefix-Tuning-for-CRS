@@ -19,32 +19,38 @@ class Prefix_BartForRec(PretrainedBartModel):
         self.preseqlen = config.preseqlen
         self.num_users = config.num_users
         self.mid_dim = config.mid_dim
+        self.with_interaction = config.with_interaction
 
         self.prefix_dropout = 0.4
         self.dropout = nn.Dropout(self.prefix_dropout)
 
         self.bart = bart_model
 
-        self.wte = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
-        self.control_trans = nn.Sequential(
-            nn.Linear(self.n_embd, self.mid_dim),
-            nn.Tanh(),
-            nn.Linear(self.mid_dim, self.match_n_layer * 2 * self.n_embd)
-        )
+        if self.with_interaction:
+            self.wte = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
+            self.control_trans = nn.Sequential(
+                nn.Linear(self.n_embd, self.mid_dim),
+                nn.Tanh(),
+                nn.Linear(self.mid_dim, self.match_n_layer * 2 * self.n_embd)
+            )
 
-        # encoder prefix
-        self.wte_enc = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
-        self.control_trans_enc = nn.Sequential(
-            nn.Linear(self.n_embd, self.mid_dim),
-            nn.Tanh(),
-            nn.Linear(self.mid_dim, self.match_n_layer * 2 * self.n_embd))
+            # encoder prefix
+            self.wte_enc = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
+            self.control_trans_enc = nn.Sequential(
+                nn.Linear(self.n_embd, self.mid_dim),
+                nn.Tanh(),
+                nn.Linear(self.mid_dim, self.match_n_layer * 2 * self.n_embd))
 
-        # cross prefix
-        self.wte2 = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
-        self.control_trans2 = nn.Sequential(
-            nn.Linear(self.n_embd, self.mid_dim),
-            nn.Tanh(),
-            nn.Linear(self.mid_dim, self.match_n_layer * 2 * self.n_embd))
+            # cross prefix
+            self.wte2 = nn.Embedding(self.preseqlen * self.num_users, self.n_embd)
+            self.control_trans2 = nn.Sequential(
+                nn.Linear(self.n_embd, self.mid_dim),
+                nn.Tanh(),
+                nn.Linear(self.mid_dim, self.match_n_layer * 2 * self.n_embd))
+        else:
+            self.wte = nn.Embedding(self.preseqlen * self.num_users, self.match_n_layer * 2 * self.n_embd)
+            self.wte_enc = nn.Embedding(self.preseqlen * self.num_users, self.match_n_layer * 2 * self.n_embd)
+            self.wte2 = nn.Embedding(self.preseqlen * self.num_users, self.match_n_layer * 2 * self.n_embd)
 
         ###### NUM PARAMS #########
         total_param = 0
@@ -58,9 +64,15 @@ class Prefix_BartForRec(PretrainedBartModel):
         old_bsz = bsz
         bsz = bsz * sample_size
 
-        past_key_values, _, seqlen = self.get_past_key_values(bsz, self.wte, self.control_trans, user_labels)
-        past_key_values_cross, _, _ = self.get_past_key_values(bsz, self.wte2, self.control_trans2, user_labels)
-        past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(old_bsz, self.wte_enc, self.control_trans_enc, user_labels)
+        if self.with_interaction:
+            past_key_values, _, seqlen = self.get_past_key_values(bsz, self.wte, user_labels, control_trans = self.control_trans)
+            past_key_values_cross, _, _ = self.get_past_key_values(bsz, self.wte2, user_labels, control_trans = self.control_trans2)
+            past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(old_bsz, self.wte_enc, user_labels, control_trans = self.control_trans_enc)
+        else:
+            past_key_values, _, seqlen = self.get_past_key_values(bsz, self.wte, user_labels, control_trans=None)
+            past_key_values_cross, _, _ = self.get_past_key_values(bsz, self.wte2, user_labels, control_trans=None)
+            past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(old_bsz, self.wte_enc, user_labels, control_trans=None)
+
 
         result = []
         for i, key_val in enumerate(past_key_values):
@@ -89,7 +101,7 @@ class Prefix_BartForRec(PretrainedBartModel):
 
         return result
 
-    def get_past_key_values(self, bsz, wte, control_trans, user_labels):
+    def get_past_key_values(self, bsz, wte, user_labels, control_trans=None):
         if self.num_users != 1:
             input_tokens = torch.stack(
                 [torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels], dim = 0
@@ -98,8 +110,11 @@ class Prefix_BartForRec(PretrainedBartModel):
             input_tokens = torch.arange(self.preseqlen).long()
             input_tokens = input_tokens.unsqueeze(0).expand(bsz, -1).to(self.device)
         
-        temp_control = wte(input_tokens)
-        past_key_values = control_trans(temp_control) #bsz, seqlen, layer*emb
+        if self.with_interaction:
+            temp_control = wte(input_tokens)
+            past_key_values = control_trans(temp_control) #bsz, seqlen, layer*emb
+        else:
+            past_key_values = wte(input_tokens)
         bsz, seqlen, _ = past_key_values.shape
         past_key_values = past_key_values.view(bsz, seqlen, self.match_n_layer * 2, self.match_n_head,
                                                self.match_n_embd)

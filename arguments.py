@@ -69,6 +69,14 @@ class ModelArguments:
         default = 0,
         metadata = {"help": "The intermediate layer dim for prefix tuning"}
     )
+    with_interaction: bool = field(
+        default = None,
+        metadata = {"help": "Whether to add interaction layer between each user's prefix"}
+    )
+    prefix_only: bool = field(
+        default = False,
+        metadata = {"help": "Only feed prefix as input, no other input_ids"}
+    )
 
 @dataclass
 class DataTrainingArguments:

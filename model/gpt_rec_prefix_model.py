@@ -4,7 +4,7 @@ from torch import  nn
 
 class Prefix_GPT2ForRec(GPT2PreTrainedModel):
     """Prefix tuning for GPT2 classification model"""
-    def __init__(self, config, gpt2_model):
+    def __init__(self, config, gpt2_model, with_interaction=True):
         super().__init__(config)
         self.match_n_layer = config.n_layer
         self.match_n_head = config.n_head
@@ -13,18 +13,21 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
 
         self.preseqlen = config.preseqlen
         self.num_users = config.num_users
-
         self.mid_dim = config.mid_dim
+        self.with_interaction = config.with_interaction
 
         self.gpt2 = gpt2_model
 
         print('[Full prefix-tuning Setting :) ]')
         # self.input_tokens = torch.arange(self.preseqlen).long()
-        self.wte = nn.Embedding(self.preseqlen * self.num_users, config.n_embd)
-        self.control_trans = nn.Sequential(
-            nn.Linear(config.n_embd, self.mid_dim),
-            nn.Tanh(),
-            nn.Linear(self.mid_dim, config.n_layer * 2 * config.n_embd))
+        if self.with_interaction:
+            self.wte = nn.Embedding(self.preseqlen * self.num_users, config.n_embd)
+            self.control_trans = nn.Sequential(
+                nn.Linear(config.n_embd, self.mid_dim),
+                nn.Tanh(),
+                nn.Linear(self.mid_dim, config.n_layer * 2 * config.n_embd))
+        else:
+            self.wte = nn.Embedding(self.preseqlen * self.num_users, config.n_layer * 2 * config.n_embd)
         
         # Here we set prefix dropout prob = 0.4
         self.prefix_dropout = 0.4
@@ -49,8 +52,11 @@ class Prefix_GPT2ForRec(GPT2PreTrainedModel):
             input_tokens = torch.arange(self.preseqlen).long()
             input_tokens = input_tokens.unsqueeze(0).expand(bsz, -1).to(self.device)
         # input_tokens = self.input_tokens.unsqueeze(0).expand(bsz, -1).to(self.device)
-        temp_control = self.wte(input_tokens)
-        past_key_values = self.control_trans(temp_control) #bsz, seqlen, layer*emb
+        if self.with_interaction:
+            temp_control = self.wte(input_tokens)
+            past_key_values = self.control_trans(temp_control) #bsz, seqlen, layer*emb
+        else:
+            past_key_values = self.wte(input_tokens)
         bsz, seqlen, _ = past_key_values.shape
         past_key_values = past_key_values.view(bsz, seqlen, self.match_n_layer * 2, self.match_n_head,
                                                self.match_n_embd)

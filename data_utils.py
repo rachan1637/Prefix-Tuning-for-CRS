@@ -6,6 +6,7 @@ import copy
 import json
 from typing import Dict, List, Optional
 import ast
+from numpy import False_
 import torch
 from torch.utils.data.dataset import Dataset
 
@@ -48,73 +49,6 @@ def load_dataset(X, y, max_samples, user_labels = None):
     dataset = YelpRecDataset(dataset)
     return dataset
 
-class LineByLineJsonRecommendationDataset(Dataset):
-    """
-    This is created for multi-user based prefix recommendation dataset
-    """
-    def __init__(self, tokenizer: PreTrainedTokenizer, file_path: str, block_size: int, input_data_mode, model_type):
-        assert os.path.isfile(file_path), f"Input file path {file_path} not found"
-        # Here, we do not cache the features, operating under the assumption
-        # that we will soon use fast multithreaded tokenizers from the
-        # `tokenizers` repo everywhere =)
-        logger.info("Creating features from dataset file at %s", file_path)
-
-        with open(file_path, 'r', encoding = 'utf-8') as f:
-            examples = json.load(f)['data']
-
-        edited_sents = []
-        user_ids = []
-        label_ids = []
-        for example in tqdm(examples):
-            single_review_key = []
-            if input_data_mode == 'keyphrase':
-                for single_keypharse in example['keypharse']:
-                    keypharse = single_keypharse[1]
-                    single_review_key.append(keypharse)
-
-                if len(single_review_key) == 0:
-                    continue
-
-                sent = ' | '.join(single_review_key) 
-                edited_sents.append(sent)
-                user_ids.append(example['user_id'])
-                label_ids.append(example['business_index'])
-                
-            elif input_data_mode == 'review':
-                review_text = example['review_text'].replace(u'\xa0', u' ')
-                edited_sents.append(review_text)
-                user_ids.append(example['user_id'])
-                label_ids.append(example['business_index'])
-
-        self.edited_sents = edited_sents
-
-        if model_type == 'bert':
-            batch_encoding = tokenizer(edited_sents, add_special_tokens=True, truncation=True, max_length=block_size,
-                                   is_split_into_words=False, padding="max_length")
-        else:
-            batch_encoding = tokenizer(edited_sents, add_special_tokens=True, truncation=True, max_length=block_size,
-                                    is_split_into_words=False)
-
-        self.examples = batch_encoding["input_ids"]
-        self.user_ids = user_ids
-        self.label_ids = label_ids
-    
-        print(f"label_id: \n {self.label_ids[0]}")
-        print(f"input_ids: \n {self.examples[0]}")
-        print(f"keypharse sent: \n {self.edited_sents[0]}")
-        print(f"use_id: \n {self.user_ids[0]}")
-        # assert len(self.tgt_sent) == len(self.examples)
-    
-    def __len__(self):
-        return len(self.examples)
-
-    # def __getitem__(self, i) -> torch.Tensor:
-    def __getitem__(self, i):
-        return (torch.tensor(self.examples[i], dtype=torch.long),
-                torch.tensor(self.label_ids[i], dtype=torch.long),
-                torch.tensor(self.user_ids[i], dtype=torch.long),
-                self.edited_sents[i]
-                )
 
 @dataclass
 class YelpRecDataset:
@@ -155,6 +89,7 @@ class DataCollatorForYelpRec:
     tuning_mode: None
     prefix_seq_len: 0
     model_type: None
+    prefix_only: False
         
     def __call__(self, examples):
         if len(examples[0]) == 4:
@@ -171,6 +106,10 @@ class DataCollatorForYelpRec:
             bs = input_ids.shape[0]
             additional_att = torch.stack([torch.tensor([1] * self.prefix_seq_len)] * bs, dim = 0)
             attention_mask = torch.concat([additional_att, attention_mask], dim = 1)
+        
+        if self.tuning_mode == "prefixtune" and self.prefix_only:
+            input_ids = None
+            attention_mask = None
 
         if self.tuning_mode == "finetune":
             # del user_labels

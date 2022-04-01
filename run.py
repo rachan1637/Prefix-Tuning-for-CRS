@@ -38,25 +38,17 @@ from scipy.special import softmax
 import transformers
 from transformers import (
     AutoConfig,
-    AutoTokenizer,
     EvalPrediction,
     HfArgumentParser,
     TrainingArguments,
     Trainer,
-    default_data_collator,
     set_seed,
 )
 from transformers.trainer_utils import get_last_checkpoint, EvalPrediction
-from transformers.trainer_pt_utils import get_parameter_names
-from transformers.utils import check_min_version
-from transformers.utils.versions import require_version
 from data import Dataset
 
 from data_utils import (
-    LineByLineJsonRecommendationDataset, 
     DataCollatorForYelpRec, 
-    YelpRecDataset, 
-    DataCollatorForMultiUserRecommendation,
     load_dataset
 )
 
@@ -130,7 +122,11 @@ def main():
     set_seed(training_args.seed)
 
     # Data loading from LMRec
-    if data_args.yelp_dataset_city is not None:
+    if data_args.dataset_name is not None:
+        with open(data_args.dataset_name, "rb") as inp:
+            dataset = pickle.load(inp)
+        logger.info(f"Load the dataset successfully {data_args.dataset_name}")
+    elif data_args.yelp_dataset_city is not None:
         if "bert" == model_args.model_type: 
             city_map = {"toronto": "dataset/yelp_toronto_selected_bert.pkl"}
         elif "gpt2" == model_args.model_type:
@@ -153,64 +149,67 @@ def main():
         # with open(city_map[data_args.yelp_dataset_city], "wb") as outp: pickle.dump(dataset, outp)
         logger.info(f"Load the dataset successfully {city_map[data_args.yelp_dataset_city]}")
 
-        if training_args.do_train:
-            logger.info(f"The input_data_mode for train is {data_args.input_data_mode}")
-            if data_args.input_data_mode == "keyphrase":
-                train_dataset = load_dataset(
-                    X = dataset.X_key_train, 
-                    y = dataset.y_train, 
-                    user_labels = dataset.user_labels_train, 
-                    max_samples = data_args.max_train_samples
-                )
-            elif data_args.input_data_mode == "review":
-                train_dataset = load_dataset(
-                    X = dataset.X_train, 
-                    y = dataset.y_train, 
-                    user_labels = dataset.user_labels_train,
-                    max_samples = data_args.max_train_samples
-                )
-            else:
-                raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
-        if training_args.do_eval:
-            logger.info(f"The input_data_mode for eval is {data_args.input_data_mode}")
-            if data_args.input_data_mode == "keyphrase":
-                eval_dataset = load_dataset(
-                    X = dataset.X_key_eval, 
-                    y = dataset.y_eval, 
-                    user_labels = dataset.user_labels_eval, 
-                    max_samples = data_args.max_eval_samples
-                )
-            elif data_args.input_data_mode == "review":
-                eval_dataset = load_dataset(
-                    X = dataset.X_eval, 
-                    y = dataset.y_eval, 
-                    user_labels = dataset.user_labels_eval, 
-                    max_samples = data_args.max_eval_samples
-                )
-            else:
-                raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
-        if training_args.do_predict:
-            logger.info(f"The input_data_mode for test is {data_args.input_data_mode}")
-            if data_args.input_data_mode == "keyphrase":
-                test_dataset = load_dataset(
-                    X = dataset.X_key_test, 
-                    y = dataset.y_test, 
-                    user_labels = dataset.user_labels_test, 
-                    max_samples = data_args.max_predict_samples
-                )
-            elif data_args.input_data_mode == "review":
-                test_dataset = load_dataset(
-                    X = dataset.X_test, 
-                    y = dataset.y_test, 
-                    user_labels = dataset.user_labels_test, 
-                    max_samples = data_args.max_predict_samples
-                )
-            else:
-                raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
+    if training_args.do_train:
+        logger.info(f"The input_data_mode for train is {data_args.input_data_mode}")
+        if data_args.input_data_mode == "keyphrase":
+            train_dataset = load_dataset(
+                X = dataset.X_key_train, 
+                y = dataset.y_train, 
+                user_labels = dataset.user_labels_train, 
+                max_samples = data_args.max_train_samples
+            )
+        elif data_args.input_data_mode == "review":
+            train_dataset = load_dataset(
+                X = dataset.X_train, 
+                y = dataset.y_train, 
+                user_labels = dataset.user_labels_train,
+                max_samples = data_args.max_train_samples
+            )
+        else:
+            raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
+    if training_args.do_eval:
+        logger.info(f"The input_data_mode for eval is {data_args.input_data_mode}")
+        if data_args.input_data_mode == "keyphrase":
+            eval_dataset = load_dataset(
+                X = dataset.X_key_eval, 
+                y = dataset.y_eval, 
+                user_labels = dataset.user_labels_eval, 
+                max_samples = data_args.max_eval_samples
+            )
+        elif data_args.input_data_mode == "review":
+            eval_dataset = load_dataset(
+                X = dataset.X_eval, 
+                y = dataset.y_eval, 
+                user_labels = dataset.user_labels_eval, 
+                max_samples = data_args.max_eval_samples
+            )
+        else:
+            raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
+    if training_args.do_predict:
+        logger.info(f"The input_data_mode for test is {data_args.input_data_mode}")
+        if data_args.input_data_mode == "keyphrase":
+            test_dataset = load_dataset(
+                X = dataset.X_key_test, 
+                y = dataset.y_test, 
+                user_labels = dataset.user_labels_test, 
+                max_samples = data_args.max_predict_samples
+            )
+        elif data_args.input_data_mode == "review":
+            test_dataset = load_dataset(
+                X = dataset.X_test, 
+                y = dataset.y_test, 
+                user_labels = dataset.user_labels_test, 
+                max_samples = data_args.max_predict_samples
+            )
+        else:
+            raise ValueError("Please specify data_args.input_data_mode to be 'keyphrase' or 'review'")
 
     # if model_args.model_name_or_path in ['gpt2', 'gpt2-medium', 'bert-base-uncased']:
     config = AutoConfig.from_pretrained(
-        model_args.model_name_or_path
+        model_args.config_name if model_args.config_name else model_args.model_name_or_path,
+        cache_dir=model_args.cache_dir,
+        revision=model_args.model_revision,
+        use_auth_token=True if model_args.use_auth_token else None,
     )
 
     # This section is to set up some other attributes in model config
@@ -227,11 +226,14 @@ def main():
                 raise ValueError("Please specify prefix_seq_len")
             if model_args.mid_dim == 0:
                 raise ValueError("Please specify mid_dim (512 in general)")
+            if model_args.with_interaction is None:
+                raise ValueError("Please specify whether the interaction layer should be added")
 
             config.preseqlen = model_args.prefix_seq_len
             config.num_users = model_args.num_users
             config.mid_dim = model_args.mid_dim
             config.tuning_mode = "prefixtune"
+            config.with_interaction = model_args.with_interaction
         elif model_args.tuning_mode == "finetune":
             config.tuning_mode = "finetune"
         else:
@@ -241,7 +243,7 @@ def main():
     if model_args.num_labels != 0:
         config.num_labels = model_args.num_labels
     elif data_args.yelp_dataset_city is not None:
-        config.num_labels = len(set(train_dataset.labels)) if training_args.do_train else len(set(eval_dataset.labels))
+        config.num_labels = len(train_dataset.labels) if training_args.do_train else len(set(eval_dataset.labels))
     else:
         raise ValueError("Please specify the number of labels in the dataset")
 
@@ -254,30 +256,26 @@ def main():
     # )
 
     if model_args.model_type == "bert":
-        if model_args.model_name_or_path != "bert-base-uncased":
-            model = MyBertForSequenceClassification.from_pretrained(
+        model = MyBertForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+            use_auth_token=True if model_args.use_auth_token else None,
+        )
+        logger.info("Initialize Bert for Rec successfully")
+    elif model_args.model_type == "gpt2":
+        if model_args.tuning_mode == "finetune":
+            model = MyGPT2ForSequenceCLassification.from_pretrained(
                 model_args.model_name_or_path,
                 from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                config=config,
                 cache_dir=model_args.cache_dir,
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
-        else:
-            model = MyBertForSequenceClassification(config)
-            logger.info("Initialize Bert for Rec successfully")
-    elif model_args.model_type == "gpt2":
-        if model_args.tuning_mode == "finetune":
-            if model_args.model_name_or_path not in ["gpt2-medium", "gpt2"]:
-                model = MyGPT2ForSequenceCLassification.from_pretrained(
-                    model_args.model_name_or_path,
-                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
-                    cache_dir=model_args.cache_dir,
-                    revision=model_args.model_revision,
-                    use_auth_token=True if model_args.use_auth_token else None,
-                )
-            else:
-                model = MyGPT2ForSequenceCLassification(config)
-                logger.info("Initialize GPT2 for Rec successfully")
+            logger.info("Initialize GPT2 for Rec successfully")
         elif model_args.tuning_mode == 'prefixtune':
             if model_args.model_name_or_path not in ["gpt2", "gpt2-medium"]:
                 model = Prefix_GPT2ForRec.from_pretrained(
@@ -338,7 +336,8 @@ def main():
     data_collator = DataCollatorForYelpRec(
         tuning_mode = model_args.tuning_mode, 
         prefix_seq_len = model_args.prefix_seq_len,
-        model_type = model_args.model_type
+        model_type = model_args.model_type,
+        prefix_only = model_args.prefix_only,
     ) 
     # else:
     #     data_collator = DataCollatorForYelpRec(tuning_mode = model_args.tuning_mode)
@@ -376,6 +375,11 @@ def main():
     optimizer = Adam(params=params, lr=training_args.learning_rate)
     # scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
     scheduler = ConstantLR(optimizer)
+
+    # params = [p for p in model.parameters()]
+    # optimizer = Adam(params=params, lr=training_args.learning_rate)
+    # # scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
+    # scheduler = ConstantLR(optimizer)
 
     trainer = Trainer(
         model=model,

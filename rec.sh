@@ -7,12 +7,13 @@
 source ENV/bin/activate
 
 # model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bart_prefixtune_without_interaction,
 # output_dir=outputs/trash
+# input_file=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/dataset/toronto/top3/selected_user1_gpt2.pkl
 
 CUDA_LAUNCH_BLOCKING=1 python run.py \
-  --model_name_or_path gpt2 \
-  --model_type gpt2 \
+  --model_name_or_path facebook/bart-base \
+  --model_type bart \
   --yelp_dataset_city toronto \
   --do_train \
   --do_eval \
@@ -28,10 +29,15 @@ CUDA_LAUNCH_BLOCKING=1 python run.py \
   --save_strategy="epoch" \
   --overwrite_output_dir \
   --load_best_model_at_end \
-  --num_labels 1121 \
   --input_data_mode keyphrase \
   --tuning_mode prefixtune \
+  --num_labels 1121 \
+  --with_interaction False \
   --prefix_seq_len 5 \
   --mid_dim 512 \
-  --num_users 1073 
+  --num_users 1073 \
+  --prefix_only False
+  # --num_users 1073 
   # --num_users 1073 \
+  # --dataset_name $input_file 
+  # --metric_for_best_model eval_accuracy 
