@@ -4,21 +4,20 @@
 # export COMET_PROJECT_NAME=prefix-rec-exp
 # export COMET_WORKSPACE=rachan1637
 
-source ENV/bin/activate
+# source ENV/bin/activate
 
 # model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/bart_prefixtune_without_interaction,
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/geneartion/gpt2_finetune
 # output_dir=outputs/trash
 # input_file=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/dataset/toronto/top3/selected_user1_gpt2.pkl
 
-CUDA_LAUNCH_BLOCKING=1 python run_rec.py \
-  --model_name_or_path facebook/bart-base \
-  --model_type bart \
-  --yelp_dataset_city toronto \
+CUDA_LAUNCH_BLOCKING=1 python run_language_modeling.py \
+  --model_name_or_path gpt2 \
+  --model_type gpt2 \
+  --dataset_file dataset/generation/yelp_toronto_selected_gpt2.pkl \
   --do_train \
   --do_eval \
-  --do_predict \
-  --per_device_train_batch_size 22 \
+  --per_device_train_batch_size 2 \
   --per_device_eval_batch_size 22 \
   --learning_rate 5e-5 \
   --num_train_epochs 10 \
@@ -29,15 +28,10 @@ CUDA_LAUNCH_BLOCKING=1 python run_rec.py \
   --save_strategy="epoch" \
   --overwrite_output_dir \
   --load_best_model_at_end \
-  --input_data_mode keyphrase \
-  --tuning_mode prefixtune \
-  --num_labels 1121 \
-  --with_interaction False \
-  --prefix_seq_len 5 \
-  --mid_dim 512 \
-  --num_users 1073 \
-  --prefix_only False
-  # --num_users 1073 
-  # --num_users 1073 \
-  # --dataset_name $input_file 
-  # --metric_for_best_model eval_accuracy 
+  --tuning_mode finetune
+#   --num_labels 1121 \
+#   --with_interaction False \
+#   --prefix_seq_len 5 \
+#   --mid_dim 512 \
+#   --num_users 1073 \
+#   --prefix_only False

@@ -25,10 +25,24 @@ from transformers.tokenization_utils_fast import PreTrainedTokenizerFast
 
 logger = logging.get_logger(__name__)
 
-def load_dataset(X, y, max_samples, user_labels = None):
+def load_table2text_dataset(input_ids, attention_mask, labels, item_labels, user_labels, max_samples):
     if max_samples is not None:
-        max_train_samples = max_samples
-        input_ids, attention_mask, labels, user_labels = X[0][:max_train_samples], X[1][:max_train_samples], y[:max_train_samples], user_labels[:max_train_samples]
+        input_ids, attention_mask, labels, item_labels, user_labels = input_ids[:max_samples], attention_mask[:max_samples], labels[:max_samples], item_labels[:max_samples], user_labels[:max_samples]
+    
+    dataset = {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": labels,
+        "item_labels": item_labels,
+        "user_labels": user_labels
+    }
+
+    dataset = YelpTable2TextDataset(dataset)
+    return dataset
+
+def load_rec_dataset(X, y, max_samples, user_labels = None):
+    if max_samples is not None:
+        input_ids, attention_mask, labels, user_labels = X[0][:max_samples], X[1][:max_samples], y[:max_samples], user_labels[:max_samples]
         # input_ids, attention_mask, labels = X[0][:max_train_samples], X[1][:max_train_samples], y[:max_train_samples]
     else:
         input_ids, attention_mask, labels, user_labels = X[0], X[1], y, user_labels
@@ -49,6 +63,26 @@ def load_dataset(X, y, max_samples, user_labels = None):
     dataset = YelpRecDataset(dataset)
     return dataset
 
+@dataclass
+class YelpTable2TextDataset:
+    def __init__(self, input_dict):
+        self.input_ids = input_dict['input_ids']
+        self.attention_mask = input_dict['attention_mask']
+        self.labels = input_dict['labels']
+        self.item_labels = input_dict['item_labels']
+        self.user_labels = input_dict['user_labels']
+
+    def __len__(self):
+        return len(self.input_ids)
+
+    def __getitem__(self, i):
+        return (
+                torch.tensor(self.input_ids[i], dtype=torch.long),
+                torch.tensor(self.attention_mask[i], dtype=torch.long),
+                torch.tensor(self.labels[i], dtype=torch.long),
+                torch.tensor(self.item_labels[i], dtype=torch.long),
+                torch.tensor(self.user_labels[i], dtype=torch.long)
+            )
 
 @dataclass
 class YelpRecDataset:
@@ -83,6 +117,36 @@ class YelpRecDataset:
                 torch.tensor(self.attention_mask[i], dtype=torch.long),
                 torch.tensor(self.labels[i], dtype=torch.long)
             )
+
+@dataclass
+class DataCollatorForTable2Text:
+    tuning_mode: None
+    add_user_prefix: None
+    add_item_prefix: None
+    prefix_only: None
+
+    def __call__(self, examples):
+        input_ids, attention_mask, labels, item_labels, user_labels = zip(*examples)
+
+        input_ids = torch.stack(input_ids, dim=0)
+        attention_mask = torch.stack(attention_mask, dim = 0)
+        labels = torch.stack(labels, dim = 0)
+        item_labels = torch.stack(item_labels, dim=0)
+        user_labels = torch.stack(user_labels, dim=0)
+        
+        output = {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
+        if self.tuning_mode == "prefixtune":
+            add_output = {}
+            if self.add_item_prefix:
+                add_output["item_labels"] = item_labels
+            if self.add_user_prefix:
+                add_output["user_labels"] = user_labels
+
+            if self.prefix_only:
+                bs = input_ids.shape[0]
+                
+            output = {**output, **add_output}
+        return output
 
 @dataclass
 class DataCollatorForYelpRec:

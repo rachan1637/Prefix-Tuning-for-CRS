@@ -77,13 +77,25 @@ class ModelArguments:
         default = False,
         metadata = {"help": "Only feed prefix as input, no other input_ids"}
     )
+    num_items: int = field(
+        default = 0,
+        metadata = {"help": "Number of items in the dataset, which is actually num_labels. But this argument is used in language modeling"}
+    )
+    add_user_prefix: bool = field(
+        default = False,
+        metadata = {"help": "Control both whether to add user prefix in LM and datacollator"}
+    )
+    add_item_prefix: bool = field(
+        default = False,
+        metadata = {"help": "Control both whether to add item prefix in LM and datacollator"}
+    )
 
 @dataclass
 class DataTrainingArguments:
     """
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
-    dataset_name: Optional[str] = field(
+    dataset_file: Optional[str] = field(
         default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
     )
     dataset_config_name: Optional[str] = field(
@@ -152,7 +164,7 @@ class DataTrainingArguments:
 
     def __post_init__(self):
         if (
-            self.dataset_name is None
+            self.dataset_file is None
             and self.train_file is None
             and self.validation_file is None
             and self.test_file is None

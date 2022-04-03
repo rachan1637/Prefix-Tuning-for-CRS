@@ -14,19 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-LMRec
+Recommendation by prefix-tuning
 """
 import logging
 import os
-import re
 import sys
 # import comet_ml
 import pickle
 import numpy as np
 from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import ConstantLR
-import torch
-import torch.nn as nn
 from sklearn.metrics import (
     f1_score, 
     recall_score, 
@@ -45,11 +42,10 @@ from transformers import (
     set_seed,
 )
 from transformers.trainer_utils import get_last_checkpoint, EvalPrediction
-from data import Dataset
 
 from data_utils import (
     DataCollatorForYelpRec, 
-    load_dataset
+    load_rec_dataset
 )
 
 from arguments import ModelArguments, DataTrainingArguments
@@ -152,14 +148,14 @@ def main():
     if training_args.do_train:
         logger.info(f"The input_data_mode for train is {data_args.input_data_mode}")
         if data_args.input_data_mode == "keyphrase":
-            train_dataset = load_dataset(
+            train_dataset = load_rec_dataset(
                 X = dataset.X_key_train, 
                 y = dataset.y_train, 
                 user_labels = dataset.user_labels_train, 
                 max_samples = data_args.max_train_samples
             )
         elif data_args.input_data_mode == "review":
-            train_dataset = load_dataset(
+            train_dataset = load_rec_dataset(
                 X = dataset.X_train, 
                 y = dataset.y_train, 
                 user_labels = dataset.user_labels_train,
@@ -170,14 +166,14 @@ def main():
     if training_args.do_eval:
         logger.info(f"The input_data_mode for eval is {data_args.input_data_mode}")
         if data_args.input_data_mode == "keyphrase":
-            eval_dataset = load_dataset(
+            eval_dataset = load_rec_dataset(
                 X = dataset.X_key_eval, 
                 y = dataset.y_eval, 
                 user_labels = dataset.user_labels_eval, 
                 max_samples = data_args.max_eval_samples
             )
         elif data_args.input_data_mode == "review":
-            eval_dataset = load_dataset(
+            eval_dataset = load_rec_dataset(
                 X = dataset.X_eval, 
                 y = dataset.y_eval, 
                 user_labels = dataset.user_labels_eval, 
@@ -188,14 +184,14 @@ def main():
     if training_args.do_predict:
         logger.info(f"The input_data_mode for test is {data_args.input_data_mode}")
         if data_args.input_data_mode == "keyphrase":
-            test_dataset = load_dataset(
+            test_dataset = load_rec_dataset(
                 X = dataset.X_key_test, 
                 y = dataset.y_test, 
                 user_labels = dataset.user_labels_test, 
                 max_samples = data_args.max_predict_samples
             )
         elif data_args.input_data_mode == "review":
-            test_dataset = load_dataset(
+            test_dataset = load_rec_dataset(
                 X = dataset.X_test, 
                 y = dataset.y_test, 
                 user_labels = dataset.user_labels_test, 
