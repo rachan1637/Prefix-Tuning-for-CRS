@@ -121,7 +121,6 @@ class YelpRecDataset:
 @dataclass
 class DataCollatorForTable2Text:
     tuning_mode: None
-    add_user_prefix: None
     add_item_prefix: None
     prefix_only: None
 
@@ -137,14 +136,13 @@ class DataCollatorForTable2Text:
         output = {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
         if self.tuning_mode == "prefixtune":
             add_output = {}
+            add_output["user_labels"] = user_labels
             if self.add_item_prefix:
                 add_output["item_labels"] = item_labels
-            if self.add_user_prefix:
-                add_output["user_labels"] = user_labels
 
             if self.prefix_only:
                 bs = input_ids.shape[0]
-                
+
             output = {**output, **add_output}
         return output
 

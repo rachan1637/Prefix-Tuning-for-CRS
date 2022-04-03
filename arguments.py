@@ -81,10 +81,6 @@ class ModelArguments:
         default = 0,
         metadata = {"help": "Number of items in the dataset, which is actually num_labels. But this argument is used in language modeling"}
     )
-    add_user_prefix: bool = field(
-        default = False,
-        metadata = {"help": "Control both whether to add user prefix in LM and datacollator"}
-    )
     add_item_prefix: bool = field(
         default = False,
         metadata = {"help": "Control both whether to add item prefix in LM and datacollator"}

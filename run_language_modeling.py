@@ -38,6 +38,7 @@ from transformers.trainer_utils import get_last_checkpoint
 from arguments import ModelArguments, DataTrainingArguments
 from data_utils import load_table2text_dataset, DataCollatorForTable2Text
 from model.modeling_bart import BartForConditionalGeneration
+from model.bart_lm_prefix_model import PrefixTuning_BartforLM
 
 logger = logging.getLogger(__name__)
 
@@ -136,14 +137,10 @@ def main():
         if model_args.with_interaction is None:
             raise ValueError("Please specify whether the interaction layer should be added")
 
-        if not model_args.add_user_prefix and not model_args.add_item_prefix:
-            raise ValueError("Please specify at least 1 prefix type in prefixtune mode")
-
         config.preseqlen = model_args.prefix_seq_len
         config.mid_dim = model_args.mid_dim
         config.with_interaction = model_args.with_interaction
         config.tuning_mode = "prefixtune" # useless? probably drop in future
-        config.add_user_prefix = model_args.add_user_prefix
         config.add_item_prefix = model_args.add_item_prefix
     elif model_args.tuning_mode == "finetune":
         config.tuning_mode = "finetune" # same as above
@@ -185,7 +182,33 @@ def main():
                 use_auth_token=True if model_args.use_auth_token else None,
             )
         elif model_args.tuning_mode == "prefixtune":
-            pass
+            if model_args.model_name_or_path == "facebook/bart-base":
+                pretrained_model = BartForConditionalGeneration.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+                # Freeze Bart Parameter
+                logger.info("Freeze Bart parameters")
+                for n, param in pretrained_model.named_parameters():
+                        # Only freeze the lm part, not the head.
+                        if "model" in n:
+                            param.requires_grad = False
+                model = PrefixTuning_BartforLM(config, bart_model=pretrained_model)
+                logger.info("Initialize Prefix Tuning Bart for LM successfully")
+            else:
+                model = PrefixTuning_BartforLM.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+                logger.info("Load Prefix Tuning Bart for LM successfully")
     else:
         raise ValueError("We only allow gpt2 and bart as our base model.")
 
@@ -195,7 +218,6 @@ def main():
     
     data_collator = DataCollatorForTable2Text(
         tuning_mode = model_args.tuning_mode,
-        add_user_prefix = model_args.add_user_prefix,
         add_item_prefix = model_args.add_item_prefix,
         prefix_only = model_args.prefix_only
     )
