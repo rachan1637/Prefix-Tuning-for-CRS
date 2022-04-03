@@ -181,7 +181,7 @@ class PrefixTuning_BartforLM(PretrainedBartModel):
         if self.add_item_prefix:
             input_tokens_item = torch.stack(
                 [torch.arange(item_label, item_label + self.preseqlen).long() for item_label in item_labels], dim = 0
-            )
+            ).to(self.device)
         
         if self.with_interaction:
             temp_control_user = wte_user(input_tokens)

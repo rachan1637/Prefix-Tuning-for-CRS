@@ -30,7 +30,6 @@ from transformers import (
     HfArgumentParser,
     TrainingArguments,
     Trainer,
-    GPT2LMHeadModel,
     set_seed
 )
 from transformers.trainer_utils import get_last_checkpoint
@@ -38,7 +37,9 @@ from transformers.trainer_utils import get_last_checkpoint
 from arguments import ModelArguments, DataTrainingArguments
 from data_utils import load_table2text_dataset, DataCollatorForTable2Text
 from model.modeling_bart import BartForConditionalGeneration
+from model.modeling_gpt2 import GPT2LMHeadModel
 from model.bart_lm_prefix_model import PrefixTuning_BartforLM
+from model.gpt2_lm_prefix_model import PrefixTuning_GPT2ForLM
 
 logger = logging.getLogger(__name__)
 
@@ -169,8 +170,39 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
+            # We add one additional [PAD] token during the tokenization. Need to resize the embedding.
+            model.resize_token_embeddings(50258)
         elif model_args.tuning_mode == "prefixtune":
-            pass
+            if model_args.model_name_or_path == "gpt2":
+                pretrained_model = GPT2LMHeadModel.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )
+                # We add one additional [PAD] token during the tokenization. Need to resize the embedding.
+                pretrained_model.resize_token_embeddings(50258)
+
+                # Freeze Bart Parameter
+                logger.info("Freeze GPT2 parameters")
+                for n, param in pretrained_model.named_parameters():
+                        # Only freeze the lm part, not the head.
+                        if "transformer" in n:
+                            param.requires_grad = False
+                model = PrefixTuning_GPT2ForLM(config, gpt2_model=pretrained_model)
+                logger.info("Initialize Prefix Tuning GPT2 for LM successfully")
+            else:
+                model = GPT2LMHeadModel.from_pretrained(
+                    model_args.model_name_or_path,
+                    from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                    config=config,
+                    cache_dir=model_args.cache_dir,
+                    revision=model_args.model_revision,
+                    use_auth_token=True if model_args.use_auth_token else None,
+                )          
+                logger.info("Load Prefix Tuning GPT2 for LM successfully")
     elif model_args.model_type == "bart":
         if model_args.tuning_mode == "finetune":
             model = BartForConditionalGeneration.from_pretrained(
@@ -211,10 +243,6 @@ def main():
                 logger.info("Load Prefix Tuning Bart for LM successfully")
     else:
         raise ValueError("We only allow gpt2 and bart as our base model.")
-
-    if model_args.model_type == 'gpt2':
-        # We add one additional [PAD] token during the tokenization. Need to resize the embedding.
-        model.resize_token_embeddings(50258)
     
     data_collator = DataCollatorForTable2Text(
         tuning_mode = model_args.tuning_mode,

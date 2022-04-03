@@ -7,14 +7,14 @@
 source ENV/bin/activate
 
 # model_name_or_path=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/trt/gpt2_keyphrase_prefixtune
-output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/geneartion/bart_prefixtune_user
+output_dir=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/outputs/geneartion/gpt2_prefixtune_user
 # output_dir=outputs/trash
 # input_file=/home/chanyunh/projects/def-ssanner/chanyunh/lmrec_re/dataset/toronto/top3/selected_user1_gpt2.pkl
 
 CUDA_LAUNCH_BLOCKING=1 python run_language_modeling.py \
-  --model_name_or_path facebook/bart-base \
-  --model_type bart \
-  --dataset_file dataset/generation/yelp_toronto_selected_bart.pkl \
+  --model_name_or_path gpt2 \
+  --model_type gpt2 \
+  --dataset_file dataset/generation/yelp_toronto_selected_gpt2.pkl \
   --do_train \
   --do_eval \
   --per_device_train_batch_size 2 \
