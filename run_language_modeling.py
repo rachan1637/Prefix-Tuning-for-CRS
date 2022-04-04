@@ -36,7 +36,7 @@ from transformers import (
     set_seed
 )
 from transformers.trainer_utils import get_last_checkpoint
-import datasets
+# import datasets
 
 from arguments import ModelArguments, DataTrainingArguments
 from data_utils import load_table2text_dataset, DataCollatorForTable2Text
@@ -45,6 +45,7 @@ from model.modeling_gpt2 import GPT2LMHeadModel
 from model.bart_lm_prefix_model import PrefixTuning_BartforLM
 from model.gpt2_lm_prefix_model import PrefixTuning_GPT2ForLM
 from trainer import EvalPrediction, EvaluateFriendlySeq2SeqTrainer
+from metrics import compute_bleu, compute_bleu_metric, compute_rouge_metric
 
 logger = logging.getLogger(__name__)
 
@@ -249,18 +250,21 @@ def main():
     else:
         raise ValueError("We only allow gpt2 and bart as our base model.")
     
-    lm_blue_metric = datasets.load_metric("bleu")
-    lm_rouge_metric = datasets.load_metric("rouge")
+    # lm_blue_metric = datasets.load_metric("bleu")
+    # lm_rouge_metric = datasets.load_metric("rouge")
     def compute_metrics(eval_predictions: EvalPrediction, section: str):
         # Compute BLEU score
-        bleu_4 = lm_blue_metric.compute(predictions = eval_predictions.predictions, references=eval_predictions.items)
-        bleu_1 = lm_blue_metric.compute(predictions = eval_predictions.predictions, references=eval_predictions.items, max_order=1)
+        # bleu_4 = lm_blue_metric.compute(predictions = eval_predictions.predictions, references=eval_predictions.items)
+        # bleu_1 = lm_blue_metric.compute(predictions = eval_predictions.predictions, references=eval_predictions.items, max_order=1)
+        bleu_4 = compute_bleu_metric(predictions = eval_predictions.predictions, references=eval_predictions.items)
+        bleu_1 = compute_bleu_metric(predictions = eval_predictions.predictions, references=eval_predictions.items, max_order=1)
         output = {"bleu_1": bleu_1["bleu"], "bleu_4": bleu_4["bleu"]}
 
         # Compute Rouge score
         predictions_str = [' '.join(pred).strip() for pred in eval_predictions.predictions]
         references_str = [' '.join(ref[0]).strip() for ref in eval_predictions.items]
-        rouge = lm_rouge_metric.compute(predictions=predictions_str, references=references_str)
+        # rouge = lm_rouge_metric.compute(predictions=predictions_str, references=references_str)
+        rouge = compute_rouge_metric(predictions=predictions_str, references=references_str)
         rouge_1 = {
             "r1_p": rouge["rouge1"].mid.precision, 
             "r1_r": rouge["rouge1"].mid.recall, 
