@@ -199,8 +199,8 @@ class EvaluateFriendlySeq2SeqTrainer(transformers.trainer_seq2seq.Seq2SeqTrainer
         generated_tokens = self.model.generate(
             inputs["input_ids"],
             attention_mask=inputs["attention_mask"],
-            user_labels=inputs["user_labels"],
-            item_labels=input["item_labels"] if "item_labels" in inputs else None,
+            user_labels=inputs["user_labels"] if "user_labels" in inputs else None,
+            item_labels=inputs["item_labels"] if "item_labels" in inputs else None,
             **gen_kwargs,
         )
 

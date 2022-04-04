@@ -178,6 +178,7 @@ def main():
             )
             # We add one additional [PAD] token during the tokenization. Need to resize the embedding.
             model.resize_token_embeddings(50258)
+            logger.info("Initialize Fine Tuning GPT2 for LM successfully")
         elif model_args.tuning_mode == "prefixtune":
             if model_args.model_name_or_path == "gpt2":
                 pretrained_model = GPT2LMHeadModel.from_pretrained(
@@ -219,6 +220,7 @@ def main():
                 revision=model_args.model_revision,
                 use_auth_token=True if model_args.use_auth_token else None,
             )
+            logger.info("Initialize Fine Tuning Bart for LM successfully")
         elif model_args.tuning_mode == "prefixtune":
             if model_args.model_name_or_path == "facebook/bart-base":
                 pretrained_model = BartForConditionalGeneration.from_pretrained(
