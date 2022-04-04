@@ -321,9 +321,6 @@ class GPT2Attention(nn.Module):
         prompt = past_prompt
         if layer_past is not None:
             past_key, past_value = layer_past
-            if prompt is not None:
-                past_key = torch.cat((prompt["prev_key"], past_key), dim=-2)
-                past_value = torch.cat((prompt["prev_value"], past_value), dim=-2)
 
             key = torch.cat((past_key, key), dim=-2)
             value = torch.cat((past_value, value), dim=-2)
@@ -857,7 +854,7 @@ class GPT2Model(GPT2PreTrainedModel):
                     encoder_attention_mask=encoder_attention_mask,
                     use_cache=use_cache,
                     output_attentions=output_attentions,
-                    past_prompt = prompt[i]
+                    past_prompt = prompt[i] if prompt is not None else None
                 )
 
             hidden_states = outputs[0]
@@ -972,6 +969,7 @@ class GPT2LMHeadModel(GPT2PreTrainedModel):
             "position_ids": position_ids,
             "attention_mask": attention_mask,
             "token_type_ids": token_type_ids,
+            "past_prompt": kwargs['past_prompt'] if "past_prompt" in kwargs else None,
         }
 
     @add_start_docstrings_to_model_forward(GPT2_INPUTS_DOCSTRING)

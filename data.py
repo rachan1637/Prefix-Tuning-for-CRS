@@ -75,8 +75,8 @@ class Dataset:
 
         if mode == "table2text":
             input_ids_list, attention_mask_list, labels, \
-            prefix_only_input_ids_list, prefix_only_attention_mask_list, prefix_only_labels, \
-            src_input_ids_list, src_text_list, review_text_list, \
+            prefix_only_input_ids_list, prefix_only_attention_mask_list, \
+            input_text_list, review_text_list, \
             item_labels_list, user_labels_list, item_id_list, user_id_list = self.encode_lm_data(model_type)
             
             self.num_items = len(item_id_list)
@@ -88,13 +88,11 @@ class Dataset:
 
             self.prefix_only_input_ids_train, self.prefix_only_input_ids_eval, self.prefix_only_input_ids_test = self.partition(prefix_only_input_ids_list)
             self.prefix_only_attention_mask_train, self.prefix_only_attention_mask_eval, self.prefix_only_attention_mask_test = self.partition(prefix_only_attention_mask_list)
-            self.prefix_only_labels_train, self.prefix_only_labels_eval, self.prefix_only_labels_test = self.partition(prefix_only_labels)
 
             self.item_labels_train, self.item_labels_eval, self.item_labels_test = self.partition(item_labels_list)
             self.user_labels_train, self.user_labels_eval, self.user_labels_test = self.partition(user_labels_list)
 
-            self.src_input_ids_train, self.src_input_ids_eval, self.src_input_ids_test = self.partition(src_input_ids_list)
-            self.src_text_train, self.src_text_eval, self.src_text_test = self.partition(src_text_list)
+            self.input_tet_train, self.input_text_eval, self.input_text_test = self.partition(input_text_list)
             self.review_text_train, self.review_text_eval, self.review_text_test = self.partition(review_text_list)
 
             self.item_id_list = item_id_list
@@ -147,10 +145,8 @@ class Dataset:
         labels = [] # keyphrase + review
         input_ids_list = [] # keyphrase
         attention_mask_list = []
-        src_input_ids_list = []
-        src_text_list = []
+        input_text_list = []
         review_text_list = []
-        prefix_only_labels = []
         prefix_only_input_ids_list = []
         prefix_only_attention_mask_list = []
         item_id_list = []
@@ -201,62 +197,54 @@ class Dataset:
                 
                 # Create input text
                 if model_type == "gpt2":
-                    input_text = category_text + " | " + keyphrase_text + "<|endoftext|>" + review_text + "<|endoftext|>"
+                    input_text = "<|endoftext|> " + category_text + " | " + keyphrase_text.strip() + "<|endoftext|>"
                 elif model_type == "bart":
-                    input_text = category_text + " | " + keyphrase_text + "<s>" + review_text + "</s>"
+                    input_text = category_text + " | " + keyphrase_text
 
-                # Get input_ids and attention)amsk
+                # Normalization
+                input_text = input_text.replace(u'\xa0', u'')
+
+                # Get input_ids and attention mask
                 input_ids, attention_mask = self.get_input_ids_and_att_mask_for_lm(
                     input_text, tokenizer, model_type
                 )
 
                 # Get label
-                label = copy.deepcopy(input_ids)
-                if model_type == "gpt2":
-                    sep_index = label.index(50256) + 1
+                review_text = "<|endoftext|> " + review_text + "<|endoftext|>" if model_type == "gpt2" else review_text
+                review_text = review_text.replace(u'\xa0', u'')
+
+                label, _ = self.get_input_ids_and_att_mask_for_lm(
+                    review_text, tokenizer, model_type
+                )
+                
+                # Mask the padding token in the label for preventing the model from computing loss
+                if model_type == 'gpt2':
+                    padding_id = 50257
                 elif model_type == "bart":
-                    sep_index = label.index(0) + 1
-                label[:sep_index] = [-100] * sep_index
+                    padding_id = 1
+                label = np.array(label)
+                label[label == padding_id] = -100
+                label = label.tolist()
 
                 input_ids_list.append(input_ids)
                 attention_mask_list.append(attention_mask)
                 labels.append(label)
 
-                # Create keyphrase_input_ids text
-                if model_type == "gpt2":
-                    src_text = category_text + " | " + keyphrase_text + "<|endoftext|>" 
-                elif model_type == "bart":
-                    src_text = category_text + " | " + keyphrase_text + "<s>" 
-
-                src_input_ids, _ = self.get_input_ids_and_att_mask_for_lm(
-                    src_text, tokenizer, model_type
-                )
-
-                src_input_ids_list.append(src_input_ids)
-                src_text_list.append(src_text)
+                input_text_list.append(input_text)
                 review_text_list.append(review_text)
 
                 # Create prefix only input text
                 if model_type == "gpt2":
-                    prefix_only_input_text = "<|endoftext|>" + review_text + review_text + "<|endoftext|>"
+                    prefix_only_input_text = "<|endoftext|>" + "<|endoftext|>"
                 elif model_type == "bart":
-                    prefix_only_input_text = "<s>" + review_text + "</s>"
+                    prefix_only_input_text = ""
                 
                 prefix_only_input_ids, prefix_only_attention_mask = self.get_input_ids_and_att_mask_for_lm(
                     prefix_only_input_text, tokenizer, model_type
                 )
 
-                # Get prefix_only_label
-                prefix_only_label = copy.deepcopy(prefix_only_input_ids)
-                if model_type == "gpt2":
-                    sep_index = prefix_only_label.index(50256) + 1
-                elif model_type == "bart":
-                    sep_index = prefix_only_label.index(0) + 1
-                prefix_only_label[:sep_index] = [-100] * sep_index
-
                 prefix_only_input_ids_list.append(prefix_only_input_ids)
                 prefix_only_attention_mask_list.append(prefix_only_attention_mask)
-                prefix_only_labels.append(prefix_only_label)
 
                 if item_id not in item_id_list:
                     item_id_list.append(item_id)
@@ -269,8 +257,8 @@ class Dataset:
 
         return (
             input_ids_list, attention_mask_list, labels, 
-            prefix_only_input_ids_list, prefix_only_attention_mask_list, prefix_only_labels, 
-            src_input_ids_list, src_text_list, review_text_list,
+            prefix_only_input_ids_list, prefix_only_attention_mask_list,
+            input_text_list, review_text_list,
             item_labels_list, user_labels_list, item_id_list, user_id_list
         )
 

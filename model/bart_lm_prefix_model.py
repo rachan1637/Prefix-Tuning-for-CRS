@@ -1,3 +1,4 @@
+from random import sample
 from transformers import PretrainedBartModel
 
 import torch.nn as nn
@@ -95,50 +96,47 @@ class PrefixTuning_BartforLM(PretrainedBartModel):
 
     def get_prompt(self, user_labels, item_labels, bsz=None, sample_size=1):
         # Sample size is used when decoding strategy is beam decoding
-        old_bsz = bsz
-        bsz = bsz * sample_size
-
         if self.with_interaction:
             if self.add_item_prefix:
                 past_key_values, _, seqlen = self.get_past_key_values(
-                    bsz, self.wte_user, user_labels, self.wte_item, item_labels, control_trans_user=self.control_trans_user, control_trans_item=self.control_trans_item
+                    self.wte_user, user_labels, self.wte_item, item_labels, control_trans_user=self.control_trans_user, control_trans_item=self.control_trans_item, sample_size=sample_size
                 )
                 past_key_values_cross, _, _ = self.get_past_key_values(
-                    bsz, self.wte2_user, user_labels, self.wte2_item, item_labels, control_trans_user=self.control_trans2_user, control_trans_item=self.control_trans2_item
+                    self.wte2_user, user_labels, self.wte2_item, item_labels, control_trans_user=self.control_trans2_user, control_trans_item=self.control_trans2_item, sample_size=sample_size
                 )
                 past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(
-                    old_bsz, self.wte_enc_user, user_labels, self.wte_enc_item, item_labels, control_trans_user=self.control_trans_enc_user, control_trans_item=self.control_trans_enc_item
+                    self.wte_enc_user, user_labels, self.wte_enc_item, item_labels, control_trans_user=self.control_trans_enc_user, control_trans_item=self.control_trans_enc_item
                 )
             else:
                 past_key_values, _, seqlen = self.get_past_key_values(
-                    bsz, self.wte_user, user_labels, wte_item=None, item_labels=None, control_trans_user=self.control_trans_user, control_trans_item=None
+                    self.wte_user, user_labels, wte_item=None, item_labels=None, control_trans_user=self.control_trans_user, control_trans_item=None, sample_size=sample_size
                 )
                 past_key_values_cross, _, _ = self.get_past_key_values(
-                    bsz, self.wte2_user, user_labels, wte_item=None, item_labels=None, control_trans_user=self.control_trans2_user, control_trans_item=None
+                    self.wte2_user, user_labels, wte_item=None, item_labels=None, control_trans_user=self.control_trans2_user, control_trans_item=None, sample_size=sample_size
                 )
                 past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(
-                    old_bsz, self.wte_enc_user, user_labels, wte_item=None, item_labels=None, control_trans_user=self.control_trans_enc_user, control_trans_item=None
+                    self.wte_enc_user, user_labels, wte_item=None, item_labels=None, control_trans_user=self.control_trans_enc_user, control_trans_item=None
                 )
         else:
             if self.add_item_prefix:
                 past_key_values, _, seqlen = self.get_past_key_values(
-                    bsz, self.wte_user, user_labels, self.wte_item, item_labels, control_trans_user=None, control_trans_item=None
+                    self.wte_user, user_labels, self.wte_item, item_labels, control_trans_user=None, control_trans_item=None, sample_size=sample_size
                 )
                 past_key_values_cross, _, _ = self.get_past_key_values(
-                    bsz, self.wte2_user, user_labels, self.wte2_item, item_labels, control_trans_user=None, control_trans_item=None
+                    self.wte2_user, user_labels, self.wte2_item, item_labels, control_trans_user=None, control_trans_item=None, sample_size=sample_size
                 )
                 past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(
-                    old_bsz, self.wte_enc_user, user_labels, self.wte_enc_item, item_labels, control_trans_user=None, control_trans_item=None
+                    self.wte_enc_user, user_labels, self.wte_enc_item, item_labels, control_trans_user=None, control_trans_item=None
                 )
             else:
                 past_key_values, _, seqlen = self.get_past_key_values(
-                    bsz, self.wte_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None
+                    self.wte_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None, sample_size=sample_size
                 )
                 past_key_values_cross, _, _ = self.get_past_key_values(
-                    bsz, self.wte2_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None
+                    self.wte2_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None, sample_size=sample_size
                 )
                 past_key_values_encoder, bsz_enc, _ = self.get_past_key_values(
-                    old_bsz, self.wte_enc_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None
+                    self.wte_enc_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None, sample_size=sample_size
                 )
 
 
@@ -169,18 +167,17 @@ class PrefixTuning_BartforLM(PretrainedBartModel):
 
         return result
 
-    def get_past_key_values(self, bsz, wte_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None):
+    def get_past_key_values(self, wte_user, user_labels, wte_item=None, item_labels=None, control_trans_user=None, control_trans_item=None, sample_size=1):
         if user_labels is not None:
             input_tokens = torch.stack(
-                [torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels], dim = 0
+                [torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels for _ in range(sample_size)], dim = 0
             ).to(self.device)
         else:
             input_tokens = torch.arange(self.preseqlen).long()
             input_tokens = input_tokens.unsqueeze(0).expand(bsz, -1).to(self.device)
-
         if self.add_item_prefix:
             input_tokens_item = torch.stack(
-                [torch.arange(item_label, item_label + self.preseqlen).long() for item_label in item_labels], dim = 0
+                [torch.arange(item_label, item_label + self.preseqlen).long() for item_label in item_labels for _ in range(sample_size)], dim = 0
             ).to(self.device)
         
         if self.with_interaction:

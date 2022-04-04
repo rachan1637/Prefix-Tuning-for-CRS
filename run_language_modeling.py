@@ -30,9 +30,13 @@ from transformers import (
     HfArgumentParser,
     TrainingArguments,
     Trainer,
+    EvalPrediction,
+    BartTokenizerFast,
+    GPT2TokenizerFast,
     set_seed
 )
 from transformers.trainer_utils import get_last_checkpoint
+import datasets
 
 from arguments import ModelArguments, DataTrainingArguments
 from data_utils import load_table2text_dataset, DataCollatorForTable2Text
@@ -40,6 +44,7 @@ from model.modeling_bart import BartForConditionalGeneration
 from model.modeling_gpt2 import GPT2LMHeadModel
 from model.bart_lm_prefix_model import PrefixTuning_BartforLM
 from model.gpt2_lm_prefix_model import PrefixTuning_GPT2ForLM
+from trainer import EvalPrediction, EvaluateFriendlySeq2SeqTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +249,31 @@ def main():
     else:
         raise ValueError("We only allow gpt2 and bart as our base model.")
     
+    lm_blue_metric = datasets.load_metric("bleu")
+    lm_rouge_metric = datasets.load_metric("rouge")
+    def compute_metrics(eval_predictions: EvalPrediction, section: str):
+        # Compute BLEU score
+        bleu_4 = lm_blue_metric.compute(predictions = eval_predictions.predictions, references=eval_predictions.items)
+        bleu_1 = lm_blue_metric.compute(predictions = eval_predictions.predictions, references=eval_predictions.items, max_order=1)
+        output = {"bleu_1": bleu_1["bleu"], "bleu_4": bleu_4["bleu"]}
+
+        # Compute Rouge score
+        predictions_str = [' '.join(pred).strip() for pred in eval_predictions.predictions]
+        references_str = [' '.join(ref[0]).strip() for ref in eval_predictions.items]
+        rouge = lm_rouge_metric.compute(predictions=predictions_str, references=references_str)
+        rouge_1 = {
+            "r1_p": rouge["rouge1"].mid.precision, 
+            "r1_r": rouge["rouge1"].mid.recall, 
+            "r1_f": rouge["rouge1"].mid.fmeasure
+        }
+        rouge_2 = {
+            "r2_p": rouge["rouge2"].mid.precision, 
+            "r2_r": rouge["rouge2"].mid.recall, 
+            "r2_f": rouge["rouge2"].mid.fmeasure
+        }
+        output = {**output, **rouge_1, **rouge_2}
+        return output
+
     data_collator = DataCollatorForTable2Text(
         tuning_mode = model_args.tuning_mode,
         add_item_prefix = model_args.add_item_prefix,
@@ -258,13 +288,22 @@ def main():
     # scheduler = StepLR(optimizer, step_size=0, gamma=0.0)
     scheduler = ConstantLR(optimizer)
 
-    trainer = Trainer(
+    if "gpt2" == model_args.model_type:
+        tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+    elif 'bart' == model_args.model_type:
+        tokenizer = BartTokenizerFast.from_pretrained("facebook/bart-base")
+
+    trainer = EvaluateFriendlySeq2SeqTrainer(
         model=model,
         args=training_args,
         data_collator=data_collator,
         train_dataset=train_dataset if training_args.do_train else None,
         eval_dataset=eval_dataset if training_args.do_eval else None,
+        eval_examples=dataset.review_text_eval if data_args.max_eval_samples is None else dataset.review_text_eval[:data_args.max_eval_samples],
         optimizers=(optimizer, scheduler),
+        compute_metrics=compute_metrics,
+        tokenizer=tokenizer,
     )
 
     if training_args.do_train:
@@ -296,6 +335,22 @@ def main():
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
+
+    if training_args.do_predict:
+        logger.info("*** Predict ***")
+
+        predict_results = trainer.predict(
+            test_dataset=test_dataset if test_dataset else eval_dataset,
+            test_examples=dataset.review_text_test if data_args.max_predict_samples is None else dataset.review_text_test[:data_args.max_predict_samples],
+            metric_key_prefix="predict"
+        )
+        metrics = predict_results.metrics
+        max_predict_samples = len(test_dataset)
+        metrics["predict_samples"] = min(max_predict_samples, len(test_dataset))
+
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
 
 if __name__ == "__main__":
     main()

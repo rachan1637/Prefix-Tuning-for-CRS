@@ -1,3 +1,4 @@
+from random import sample
 import torch
 from transformers import GPT2PreTrainedModel
 from torch import  nn
@@ -58,10 +59,10 @@ class PrefixTuning_GPT2ForLM(GPT2PreTrainedModel):
 
 
     def get_prompt(self, user_labels, item_labels = None, bsz=None, sample_size = 1):
-        bsz = bsz * sample_size
+        # bsz = bsz * sample_size
         if user_labels is not None:
             input_tokens_user = torch.stack(
-                [torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels], dim = 0
+                [torch.arange(user_label, user_label + self.preseqlen).long() for user_label in user_labels for _ in range(sample_size)], dim = 0
             ).to(self.device)
         else:
             input_tokens_user = torch.arange(self.preseqlen).long()

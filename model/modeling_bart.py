@@ -1376,7 +1376,7 @@ class BartForConditionalGeneration(BartPretrainedModel):
             "decoder_head_mask": decoder_head_mask,
             "cross_attn_head_mask": cross_attn_head_mask,
             "use_cache": use_cache,  # change this to avoid caching (presumably for debugging)
-            "past_prompt": kwargs['past_prompt'],
+            "past_prompt": kwargs['past_prompt'] if "past_prompt" in kwargs else None,
         }
 
     def prepare_decoder_input_ids_from_labels(self, labels: torch.Tensor):
