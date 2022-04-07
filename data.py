@@ -73,17 +73,24 @@ class Dataset:
         self.train_size = int(len(self.df) * 0.8)
         self.eval_size = int(len(self.df) * 0.1)
 
-        if mode == "table2text":
+        if mode == "conditional_generation":
             input_ids_list, attention_mask_list, labels, \
             prefix_only_input_ids_list, prefix_only_attention_mask_list, \
             input_text_list, review_text_list, \
-            item_labels_list, user_labels_list, item_id_list, user_id_list = self.encode_lm_data(model_type)
+            item_labels_list, user_labels_list, item_id_list, user_id_list, \
+            src_input_ids_list, src_attention_mask_list = self.encode_lm_data(model_type)
             
             self.num_items = len(item_id_list)
             self.num_users = len(user_id_list)
 
             self.input_ids_train, self.input_ids_eval, self.input_ids_test = self.partition(input_ids_list)
             self.attention_mask_train, self.attention_mask_eval, self.attention_mask_test = self.partition(attention_mask_list)
+
+            if model_type == "gpt2":
+                # The input of geneartion is different from training in GPT-2
+                _, self.input_ids_eval, self.input_ids_test = self.partition(src_input_ids_list)
+                _, self.attention_mask_eval, self.attention_mask_test = self.partition(src_attention_mask_list)
+
             self.labels_train, self.labels_eval, self.labels_test = self.partition(labels)
 
             self.prefix_only_input_ids_train, self.prefix_only_input_ids_eval, self.prefix_only_input_ids_test = self.partition(prefix_only_input_ids_list)
@@ -92,7 +99,7 @@ class Dataset:
             self.item_labels_train, self.item_labels_eval, self.item_labels_test = self.partition(item_labels_list)
             self.user_labels_train, self.user_labels_eval, self.user_labels_test = self.partition(user_labels_list)
 
-            self.input_tet_train, self.input_text_eval, self.input_text_test = self.partition(input_text_list)
+            self.input_text_train, self.input_text_eval, self.input_text_test = self.partition(input_text_list)
             self.review_text_train, self.review_text_eval, self.review_text_test = self.partition(review_text_list)
 
             self.item_id_list = item_id_list
@@ -153,6 +160,8 @@ class Dataset:
         user_id_list = []
         item_labels_list = []
         user_labels_list = []
+        src_input_ids_list = []
+        src_attention_mask_list = []
         data = self.df.values.tolist()
         if "gpt2" in model_type:
             tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
@@ -194,10 +203,19 @@ class Dataset:
                 
                 if len(k_list) > 0:
                     keyphrase_text = keyphrase_text[:-2]
+
+                review_text = review_text.replace(u'\xa0', u'')
                 
                 # Create input text
                 if model_type == "gpt2":
-                    input_text = "<|endoftext|> " + category_text + " | " + keyphrase_text.strip() + "<|endoftext|>"
+                    input_text = category_text + " | " + keyphrase_text.strip() + "<|endoftext|> " + review_text +  "<|endoftext|>"
+                    src_text = category_text + " | " + keyphrase_text.strip() + "<|endoftext|>"
+                    
+                    src_input_ids, src_attention_mask = self.get_input_ids_and_att_mask_for_lm(
+                        src_text, tokenizer, model_type
+                    )
+                    src_input_ids_list.append(src_input_ids)
+                    src_attention_mask_list.append(src_attention_mask)
                 elif model_type == "bart":
                     input_text = category_text + " | " + keyphrase_text
 
@@ -210,18 +228,21 @@ class Dataset:
                 )
 
                 # Get label
-                review_text = "<|endoftext|> " + review_text + "<|endoftext|>" if model_type == "gpt2" else review_text
-                review_text = review_text.replace(u'\xa0', u'')
-
-                label, _ = self.get_input_ids_and_att_mask_for_lm(
-                    review_text, tokenizer, model_type
-                )
+                if model_type == "gpt2":
+                    label = copy.deepcopy(input_ids)
+                    sep_idx = label.index(50256) + 1
+                    label[:sep_idx] = [-100] * sep_idx
+                else:
+                    label, _ = self.get_input_ids_and_att_mask_for_lm(
+                        review_text, tokenizer, model_type
+                    )
                 
                 # Mask the padding token in the label for preventing the model from computing loss
                 if model_type == 'gpt2':
                     padding_id = 50257
                 elif model_type == "bart":
                     padding_id = 1
+
                 label = np.array(label)
                 label[label == padding_id] = -100
                 label = label.tolist()
@@ -259,7 +280,8 @@ class Dataset:
             input_ids_list, attention_mask_list, labels, 
             prefix_only_input_ids_list, prefix_only_attention_mask_list,
             input_text_list, review_text_list,
-            item_labels_list, user_labels_list, item_id_list, user_id_list
+            item_labels_list, user_labels_list, item_id_list, user_id_list,
+            src_input_ids_list, src_attention_mask_list
         )
 
 

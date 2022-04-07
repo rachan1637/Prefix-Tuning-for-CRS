@@ -70,7 +70,7 @@ class PrefixTuning_GPT2ForLM(GPT2PreTrainedModel):
 
         if self.add_item_prefix:
             input_tokens_item = torch.stack(
-                [torch.arange(item_label, item_label + self.preseqlen).long() for item_label in item_labels], dim = 0
+                [torch.arange(item_label, item_label + self.preseqlen).long() for item_label in item_labels for _ in range(sample_size)], dim = 0
             ).to(self.device)
 
         # input_tokens = self.input_tokens.unsqueeze(0).expand(bsz, -1).to(self.device)
@@ -81,7 +81,6 @@ class PrefixTuning_GPT2ForLM(GPT2PreTrainedModel):
             if self.add_item_prefix:
                 temp_control_item = self.wte_item(input_tokens_item)
                 past_key_values_item = self.control_trans_item(temp_control_item)
-
                 past_key_values = torch.concat([past_key_values_user, past_key_values_item], dim = 1)
                 assert past_key_values.shape[1] == self.preseqlen * 2
             else:
