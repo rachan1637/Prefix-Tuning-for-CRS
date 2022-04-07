@@ -19,6 +19,9 @@ if version.parse(torch.__version__) >= version.parse("1.6"):
 
 from data_utils import YelpTable2TextDataset
 
+from model.modeling_gpt2 import GPT2LMHeadModel
+from model.modeling_bart import BartForConditionalGeneration
+
 class EvalPrediction(NamedTuple):
     predictions: List[str]
     items: List[dict]
@@ -196,13 +199,20 @@ class EvaluateFriendlySeq2SeqTrainer(transformers.trainer_seq2seq.Seq2SeqTrainer
             "no_repeat_ngram_size": 0,  # FIXME: hard coding the no_repeat_ngram_size
         }
 
-        generated_tokens = self.model.generate(
-            inputs["input_ids"],
-            attention_mask=inputs["attention_mask"],
-            user_labels=inputs["user_labels"] if "user_labels" in inputs else None,
-            item_labels=inputs["item_labels"] if "item_labels" in inputs else None,
-            **gen_kwargs,
-        )
+        if type(self.model) == BartForConditionalGeneration or type(self.model) == GPT2LMHeadModel:
+            generated_tokens = self.model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                **gen_kwargs,
+            )
+        else:
+            generated_tokens = self.model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                user_labels=inputs["user_labels"] if "user_labels" in inputs else None,
+                item_labels=inputs["item_labels"] if "item_labels" in inputs else None,
+                **gen_kwargs,
+            )
 
         # in case the batch is shorter than max length, the output should be padded
         if generated_tokens.shape[-1] < gen_kwargs["max_length"]:
